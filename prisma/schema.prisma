@@ -1,0 +1,103 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Brand {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  market    String
+  models    Model[]
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique // ex: Picape, SUV, Performance
+  models    Model[]
+}
+
+model Model {
+  id           String     @id @default(uuid())
+  brandId      String
+  categoryId   String
+  name         String     // ex: Ranger
+  family       String     // ex: Ranger
+  status       String     @default("Ativo")
+  url          String
+  brand        Brand      @relation(fields: [brandId], references: [id])
+  category     Category   @relation(fields: [categoryId], references: [id])
+  versions     Version[]
+  updatedAt    DateTime   @updatedAt
+}
+
+model Version {
+  id              String         @id @default(uuid())
+  modelId         String
+  slug            String         @unique
+  name            String         // ex: Raptor 4WD AT
+  modelYear       Int
+  basePrice       Float?
+  currency        String         @default("BRL")
+  url             String?
+  specsUrl        String?
+  model           Model          @relation(fields: [modelId], references: [id])
+  specs           Specification?
+  colors          VersionColor[]
+  images          Image[]
+  sources         SourceRecord[]
+  updatedAt       DateTime       @updatedAt
+}
+
+model Specification {
+  id           String  @id @default(uuid())
+  versionId    String  @unique
+  description  String?
+  fuel         String?
+  powerCv      Int?
+  torqueNm     Int?
+  traction     String?
+  transmission String?
+  version      Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+}
+
+model Color {
+  id       String         @id @default(uuid())
+  name     String         @unique // ex: Azul Belize
+  hexCode  String?
+  versions VersionColor[]
+}
+
+model VersionColor {
+  versionId    String
+  colorId      String
+  availability String  @default("Disponível")
+  version      Version @relation(fields: [versionId], references: [id])
+  color        Color   @relation(fields: [colorId], references: [id])
+  @@id([versionId, colorId])
+}
+
+model Image {
+  id        String  @id @default(uuid())
+  versionId String
+  type      String  // ex: principal, interior
+  url       String
+  version   Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+}
+
+model SourceRecord {
+  id          String   @id @default(uuid())
+  versionId   String
+  sourceUrl   String
+  collectedAt DateTime @default(now())
+  version     Version  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+}
