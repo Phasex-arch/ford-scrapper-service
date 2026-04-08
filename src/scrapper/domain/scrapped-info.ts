@@ -7,7 +7,7 @@ export interface FordCatalogResponse {
 }
 
 export interface VehicleInfo {
-  id: string;
+  slug: string;
   categoria_principal: string;
   categoria_secundaria: string | null;
   tipo_veiculo: string;

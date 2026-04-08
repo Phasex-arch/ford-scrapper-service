@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { FordCrawlerService } from '../infrastructure/ford-crawler.service.js';
 import { PdfDownloaderService } from '../infrastructure/pdf-downloader.service.js';
 import { GeminiReaderService } from '../infrastructure/gemini-reader.service.js';
+import { PdfTextExtractorService } from '../infrastructure/pdf-text-extractor.service.js';
 import type {
   FordCatalogResponse,
   VehicleInfo,
@@ -12,6 +13,8 @@ import type {
 const CONCURRENCY = 3;
 const HTML_WARNING =
   'Nenhum arquivo ficha-tecnica.pdf encontrado na página do modelo. Dados extraídos via HTML da página de versão — recomenda-se conferência manual.';
+const LOCAL_PARSE_WARNING =
+  'Extração via Gemini falhou (quota ou erro). Dados extraídos localmente do PDF com pdf-parse — recomenda-se conferência manual.';
 
 @Injectable()
 export class ScrapperService {
@@ -21,6 +24,7 @@ export class ScrapperService {
     private readonly crawler: FordCrawlerService,
     private readonly pdfDownloader: PdfDownloaderService,
     private readonly geminiReader: GeminiReaderService,
+    private readonly pdfTextExtractor: PdfTextExtractorService,
   ) {}
 
   async scrapeAll(): Promise<FordCatalogResponse> {
@@ -84,74 +88,132 @@ export class ScrapperService {
       modelData = { fichaTecnicaPdfUrl: null, versionUrls: [], colors: [], imageUrls: [] };
     }
 
-    if (modelData.fichaTecnicaPdfUrl) {
-      return this.processWithPdf(primary, modelData, modelPageUrl);
+    // --- Tier 1: PDF link found directly in HTML ---
+    let pdfUrl = modelData.fichaTecnicaPdfUrl;
+    let base64: string | null = null;
+
+    if (pdfUrl) {
+      this.logger.log(`Tier 1: PDF link found in HTML → ${pdfUrl}`);
+      base64 = await this.pdfDownloader.downloadAsBase64(pdfUrl);
     }
 
-    return this.processWithHtml(entries, modelData, modelPageUrl);
+    // --- Tier 2: construct candidate CDN URLs ---
+    if (!base64) {
+      const candidates = this.crawler.buildCandidatePdfUrls(
+        modelPageUrl,
+        primary.modelYear,
+      );
+      for (const candidate of candidates) {
+        this.logger.log(`Tier 2: trying CDN candidate → ${candidate}`);
+        base64 = await this.pdfDownloader.downloadAsBase64(candidate);
+        if (base64) {
+          pdfUrl = candidate;
+          break;
+        }
+      }
+    }
+
+    // --- No PDF at all → Tier 5: HTML scrape ---
+    if (!base64) {
+      this.logger.warn(`No PDF obtainable for ${primary.name}, falling back to HTML scrape`);
+      return this.processWithHtml(entries, modelData, modelPageUrl);
+    }
+
+    // --- Tier 3: try Gemini extraction ---
+    modelData.fichaTecnicaPdfUrl = pdfUrl;
+    return this.processWithPdf(primary, entries, modelData, modelPageUrl, base64);
   }
 
   private async processWithPdf(
     entry: CatalogEntry,
+    allEntries: CatalogEntry[],
     modelData: ModelPageData,
     modelPageUrl: string,
+    base64: string,
   ): Promise<VehicleInfo[]> {
-    const base64 = await this.pdfDownloader.downloadAsBase64(modelData.fichaTecnicaPdfUrl!);
-    if (!base64) {
-      this.logger.warn(`PDF download failed, falling back to HTML for ${entry.name}`);
-      return this.processWithHtml([entry], modelData, modelPageUrl);
-    }
-
     try {
       const extracts = await this.geminiReader.extractSpecsFromPdf(base64, {
         modelName: entry.name,
         category: entry.category,
       });
 
-      return extracts.map((extract) => {
-        const slug = this.buildSlug(extract.modelo, extract.versao);
-        return {
-          id: slug,
-          categoria_principal: entry.category,
-          categoria_secundaria: null,
-          tipo_veiculo: extract.tipo_veiculo ?? entry.category,
-          familia: extract.modelo ?? entry.name,
-          modelo: extract.modelo ?? entry.name,
-          versao: extract.versao ?? 'Base',
-          ano_modelo: extract.ano_modelo ?? entry.modelYear ?? new Date().getFullYear(),
-          status: 'Ativo',
-          preco_inicial: extract.preco_inicial ?? entry.price,
-          moeda: 'BRL',
-          motorizacao: {
-            descricao: extract.motorizacao?.descricao ?? null,
-            combustivel: extract.motorizacao?.combustivel ?? null,
-            potencia_cv: extract.motorizacao?.potencia_cv ?? null,
-            torque_nm: extract.motorizacao?.torque_nm ?? null,
-            tracao: extract.motorizacao?.tracao ?? null,
-            transmissao: extract.motorizacao?.transmissao ?? null,
-          },
-          cores: (extract.cores ?? []).map((c) => ({
-            nome: c.nome,
-            codigo: c.codigo ?? null,
-            disponibilidade: 'Disponível',
-          })),
-          imagens: modelData.imageUrls.slice(0, 3).map((url, idx) => ({
-            tipo: idx === 0 ? 'principal' : 'galeria',
-            url,
-          })),
-          fontes: {
-            modelo_url: modelPageUrl,
-            versao_url: null,
-            ficha_tecnica_url: modelData.fichaTecnicaPdfUrl,
-            cores_url: modelPageUrl,
-          },
-          observacao: null,
-        };
-      });
+      if (extracts.length > 0) {
+        return extracts.map((extract) =>
+          this.buildVehicleFromExtract(extract, entry, modelData, modelPageUrl, null),
+        );
+      }
     } catch (err) {
-      this.logger.error(`Gemini extraction failed for ${entry.name}`, (err as Error).message);
-      return this.processWithHtml([entry], modelData, modelPageUrl);
+      this.logger.warn(
+        `Tier 3 (Gemini) failed for ${entry.name}: ${(err as Error).message}. Trying local PDF parse...`,
+      );
     }
+
+    // --- Tier 4: local PDF parse with pdf-parse ---
+    try {
+      const localExtracts = await this.pdfTextExtractor.extractFromBase64(base64, {
+        modelName: entry.name,
+        category: entry.category,
+      });
+
+      if (localExtracts.length > 0) {
+        this.logger.log(`Tier 4: local PDF parse produced ${localExtracts.length} version(s)`);
+        return localExtracts.map((extract) =>
+          this.buildVehicleFromExtract(extract, entry, modelData, modelPageUrl, LOCAL_PARSE_WARNING),
+        );
+      }
+    } catch (err) {
+      this.logger.error(`Tier 4 (local parse) also failed for ${entry.name}`, (err as Error).message);
+    }
+
+    this.logger.warn(`All PDF tiers exhausted for ${entry.name}, falling back to HTML`);
+    return this.processWithHtml(allEntries, modelData, modelPageUrl);
+  }
+
+  private buildVehicleFromExtract(
+    extract: import('../infrastructure/gemini-reader.service.js').GeminiVehicleExtract,
+    entry: CatalogEntry,
+    modelData: ModelPageData,
+    modelPageUrl: string,
+    observacao: string | null,
+  ): VehicleInfo {
+    const slug = this.buildSlug(extract.modelo, extract.versao);
+    return {
+      slug,
+      categoria_principal: entry.category,
+      categoria_secundaria: null,
+      tipo_veiculo: extract.tipo_veiculo ?? entry.category,
+      familia: extract.modelo ?? entry.name,
+      modelo: extract.modelo ?? entry.name,
+      versao: extract.versao ?? 'Base',
+      ano_modelo: extract.ano_modelo ?? entry.modelYear ?? new Date().getFullYear(),
+      status: 'Ativo',
+      preco_inicial: extract.preco_inicial ?? entry.price,
+      moeda: 'BRL',
+      motorizacao: {
+        descricao: extract.motorizacao?.descricao ?? null,
+        combustivel: extract.motorizacao?.combustivel ?? null,
+        potencia_cv: extract.motorizacao?.potencia_cv ?? null,
+        torque_nm: extract.motorizacao?.torque_nm ?? null,
+        tracao: extract.motorizacao?.tracao ?? null,
+        transmissao: extract.motorizacao?.transmissao ?? null,
+      },
+      cores: (extract.cores ?? []).map((c) => ({
+        nome: c.nome,
+        codigo: c.codigo ?? null,
+        disponibilidade: 'Disponível',
+      })),
+      imagens: modelData.imageUrls.slice(0, 3).map((url, idx) => ({
+        tipo: idx === 0 ? 'principal' : 'galeria',
+        url,
+      })),
+      fontes: {
+        modelo_url: modelPageUrl,
+        versao_url: null,
+        ficha_tecnica_url: modelData.fichaTecnicaPdfUrl,
+        cores_url: modelPageUrl,
+      },
+      observacao,
+    };
   }
 
   private async processWithHtml(
@@ -178,7 +240,7 @@ export class ScrapperService {
         const slug = this.buildSlug(entry.name, versionData.versionName);
 
         vehicles.push({
-          id: slug,
+          slug,
           categoria_principal: entry.category,
           categoria_secundaria: null,
           tipo_veiculo: entry.category,
@@ -231,7 +293,7 @@ export class ScrapperService {
     modelPageUrl: string,
   ): VehicleInfo {
     return {
-      id: this.buildSlug(entry.name, entry.brVersion ?? 'base'),
+      slug: this.buildSlug(entry.name, entry.brVersion ?? 'base'),
       categoria_principal: entry.category,
       categoria_secundaria: null,
       tipo_veiculo: entry.category,

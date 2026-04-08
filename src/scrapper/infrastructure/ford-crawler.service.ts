@@ -175,8 +175,20 @@ export class FordCrawlerService {
     const imageUrls: string[] = [];
 
     $('a').each((_, el) => {
+      if (fichaTecnicaPdfUrl) return;
       const href = $(el).attr('href') ?? '';
-      if (href.includes('ficha-tecnica') && href.endsWith('.pdf')) {
+      if (!href) return;
+
+      const hrefMatch = href.includes('ficha-tecnica') && href.endsWith('.pdf');
+
+      const rawText = $(el).text().trim();
+      const normalized = rawText
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      const textMatch = normalized.includes('ficha tecnica') && href.endsWith('.pdf');
+
+      if (hrefMatch || textMatch) {
         fichaTecnicaPdfUrl = this.resolveUrl(href);
       }
     });
@@ -381,6 +393,36 @@ export class FordCrawlerService {
     }
 
     return info;
+  }
+
+  buildCandidatePdfUrls(modelPageUrl: string, modelYear: number | null): string[] {
+    const parsed = new URL(modelPageUrl);
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    const slug = (segments[1] ?? segments[0] ?? '')
+      .replace(/\.html$/, '')
+      .toLowerCase();
+
+    if (!slug) return [];
+
+    const years = [
+      modelYear ?? new Date().getFullYear(),
+      new Date().getFullYear(),
+      new Date().getFullYear() - 1,
+    ];
+    const uniqueYears = [...new Set(years)];
+
+    const folderVariants = [slug, `nova-geracao-${slug}`, `novo-${slug}`, `nova-${slug}`];
+    const cdnBase = `${BASE_URL}/content/dam/Ford/website-assets/latam/br/nameplate`;
+
+    const candidates: string[] = [];
+    for (const year of uniqueYears) {
+      for (const folder of folderVariants) {
+        candidates.push(`${cdnBase}/${year}/${folder}/pdf/fbr-${slug}-ficha-tecnica.pdf`);
+      }
+    }
+
+    this.logger.debug(`Generated ${candidates.length} candidate PDF URLs for ${slug}`);
+    return candidates;
   }
 
   private nameFromUrl(url: string): string {

@@ -54,15 +54,28 @@ IMPORTANT RULES:
 - If colors are listed per version, associate them correctly. If listed globally, include them in all versions.
 - Extract ALL versions found in the PDF.`;
 
+const MIN_INTERVAL_MS = 4_000;
+
 @Injectable()
 export class GeminiReaderService {
   private readonly logger = new Logger(GeminiReaderService.name);
   private readonly ai: GoogleGenAI;
+  private lastCallAt = 0;
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('GEMINI_KEY');
     if (!apiKey) throw new Error('GEMINI_KEY not configured');
     this.ai = new GoogleGenAI({ apiKey });
+  }
+
+  private async enforceRateLimit(): Promise<void> {
+    const elapsed = Date.now() - this.lastCallAt;
+    if (elapsed < MIN_INTERVAL_MS) {
+      const wait = MIN_INTERVAL_MS - elapsed;
+      this.logger.debug(`Rate limiter: waiting ${wait}ms before next Gemini call`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+    this.lastCallAt = Date.now();
   }
 
   async extractSpecsFromPdf(
@@ -79,8 +92,10 @@ export class GeminiReaderService {
           `Sending PDF to Gemini (attempt ${attempt}, ~${Math.round(base64Pdf.length / 1370)} KB)`,
         );
 
+        await this.enforceRateLimit();
+
         const response = await this.ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash-lite',
           contents: [
             {
               role: 'user',
