@@ -12,92 +12,64 @@ datasource db {
   provider = "postgresql"
 }
 
-model Brand {
+model Vehicle {
+  id                   String      @id @default(uuid())
+  slug                 String      @unique
+  categoria_principal  String
+  categoria_secundaria String?
+  tipo_veiculo         String
+  familia              String
+  modelo               String
+  versao               String
+  ano_modelo           Int
+  status               String      @default("Ativo")
+  preco_inicial        Float?
+  basePrice            Float?
+  currency             String      @default("BRL")
+  motorizacao          Motorizacao @relation(fields: [motorizacaoId], references: [id])
+  cores                Cor[]
+  imagens              Imagem[]
+  fontes               Fontes      @relation(fields: [fontesId], references: [id])
+  observacao           String?
+  updatedAt            DateTime    @default(now())
+  createdAt            DateTime    @default(now())
+  motorizacaoId        String
+  fontesId             String
+}
+
+model Motorizacao {
+  id          String    @id @default(uuid())
+  descricao   String
+  combustivel String
+  potencia_cv Int
+  torque_nm   Int
+  tracao      String
+  transmissao String
+  vehicles    Vehicle[]
+}
+
+model Cor {
+  id              String   @id @default(uuid())
+  nome            String
+  codigo          String?
+  disponibilidade String   @default("Disponível")
+  vehicle         Vehicle? @relation(fields: [vehicleId], references: [id])
+  vehicleId       String?
+}
+
+model Imagem {
   id        String   @id @default(uuid())
-  name      String   @unique
-  market    String
-  models    Model[]
-  createdAt DateTime @default(now())
-}
-
-model Category {
-  id        String   @id @default(uuid())
-  name      String   @unique // ex: Picape, SUV, Performance
-  models    Model[]
-}
-
-model Model {
-  id           String     @id @default(uuid())
-  brandId      String
-  categoryId   String
-  name         String     // ex: Ranger
-  family       String     // ex: Ranger
-  status       String     @default("Ativo")
-  url          String
-  brand        Brand      @relation(fields: [brandId], references: [id])
-  category     Category   @relation(fields: [categoryId], references: [id])
-  versions     Version[]
-  updatedAt    DateTime   @updatedAt
-}
-
-model Version {
-  id              String         @id @default(uuid())
-  modelId         String
-  slug            String         @unique
-  name            String         // ex: Raptor 4WD AT
-  modelYear       Int
-  basePrice       Float?
-  currency        String         @default("BRL")
-  url             String?
-  specsUrl        String?
-  model           Model          @relation(fields: [modelId], references: [id])
-  specs           Specification?
-  colors          VersionColor[]
-  images          Image[]
-  sources         SourceRecord[]
-  updatedAt       DateTime       @updatedAt
-}
-
-model Specification {
-  id           String  @id @default(uuid())
-  versionId    String  @unique
-  description  String?
-  fuel         String?
-  powerCv      Int?
-  torqueNm     Int?
-  traction     String?
-  transmission String?
-  version      Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
-}
-
-model Color {
-  id       String         @id @default(uuid())
-  name     String         @unique // ex: Azul Belize
-  hexCode  String?
-  versions VersionColor[]
-}
-
-model VersionColor {
-  versionId    String
-  colorId      String
-  availability String  @default("Disponível")
-  version      Version @relation(fields: [versionId], references: [id])
-  color        Color   @relation(fields: [colorId], references: [id])
-  @@id([versionId, colorId])
-}
-
-model Image {
-  id        String  @id @default(uuid())
-  versionId String
-  type      String  // ex: principal, interior
+  tipo      String
   url       String
-  version   Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+  vehicleId String?
 }
 
-model SourceRecord {
-  id          String   @id @default(uuid())
-  versionId   String
-  sourceUrl   String
-  collectedAt DateTime @default(now())
-  version     Version  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+model Fontes {
+  id                String    @id @default(uuid())
+  modelo_url        String
+  versao_url        String?
+  ficha_tecnica_url String?
+  cores_url         String
+  vehicles          Vehicle[]
 }
