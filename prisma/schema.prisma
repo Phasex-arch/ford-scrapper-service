@@ -35,6 +35,11 @@ model Vehicle {
   createdAt            DateTime    @default(now())
   motorizacaoId        String
   fontesId             String
+
+  @@index([categoria_principal])
+  @@index([modelo])
+  @@index([familia])
+  @@index([status])
 }
 
 model Motorizacao {
@@ -72,4 +77,15 @@ model Fontes {
   ficha_tecnica_url String?
   cores_url         String
   vehicles          Vehicle[]
+}
+
+model SyncRun {
+  id            String    @id @default(uuid())
+  status        String    @default("running")
+  vehiclesFound Int       @default(0)
+  vehiclesSaved Int       @default(0)
+  errors        String[]
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  durationMs    Int?
 }
