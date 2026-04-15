@@ -25,7 +25,7 @@ export class ScrapperController {
     return result;
   }
 
-  @Post('ford')
+  @Post('sync')
   async syncDataFromScrapper(): Promise<void> {
     this.logger.log('Syncing data from scrapper');
     const result = await this.scrapperService.scrapeAll();
