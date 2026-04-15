@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, NotFoundException, Logger } from '@nestjs/common';
+import { Controller, Get, Param, Query, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { VehicleService } from '../application/vehicle/vehicle.service.js';
 import {
@@ -85,6 +85,148 @@ export class VehicleController {
     };
   }
 
+  @Get('categories')
+  @ApiOperation({ summary: 'List all distinct vehicle categories with count' })
+  @ApiResponse({ status: 200, description: 'List of categories' })
+  async findAllCategories() {
+    this.logger.log('GET /vehicles/categories');
+    const categories = await this.vehicleService.findDistinctCategories();
+
+    return {
+      total: categories.length,
+      categories: categories.map((c) => ({
+        nome: c.categoria_principal,
+        total_veiculos: c.count,
+      })),
+    };
+  }
+
+  @Get('colors')
+  @ApiOperation({ summary: 'List all distinct vehicle colors with count' })
+  @ApiResponse({ status: 200, description: 'List of colors' })
+  async findAllColors() {
+    this.logger.log('GET /vehicles/colors');
+    const colors = await this.vehicleService.findDistinctColors();
+
+    return {
+      total: colors.length,
+      cores: colors.map((c) => ({
+        nome: c.nome,
+        total_veiculos: c.count,
+      })),
+    };
+  }
+
+  @Get('models')
+  @ApiOperation({ summary: 'List all distinct vehicle models with family and count' })
+  @ApiResponse({ status: 200, description: 'List of models' })
+  async findAllModels() {
+    this.logger.log('GET /vehicles/models');
+    const models = await this.vehicleService.findDistinctModels();
+
+    return {
+      total: models.length,
+      modelos: models.map((m) => ({
+        modelo: m.modelo,
+        familia: m.familia,
+        total_versoes: m.count,
+      })),
+    };
+  }
+
+  @Get('versions')
+  @ApiOperation({ summary: 'List all distinct vehicle versions with model reference' })
+  @ApiResponse({ status: 200, description: 'List of versions' })
+  async findAllVersions() {
+    this.logger.log('GET /vehicles/versions');
+    const versions = await this.vehicleService.findDistinctVersions();
+
+    return {
+      total: versions.length,
+      versoes: versions.map((v) => ({
+        versao: v.versao,
+        modelo: v.modelo,
+        total_veiculos: v.count,
+      })),
+    };
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search vehicles by text query across multiple fields' })
+  @ApiQuery({ name: 'q', required: true, description: 'Search query text' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20)' })
+  @ApiResponse({ status: 200, description: 'Search results with pagination' })
+  @ApiResponse({ status: 400, description: 'Missing query parameter' })
+  async search(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!q || q.trim().length === 0) {
+      throw new BadRequestException('Query parameter "q" is required');
+    }
+
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
+
+    this.logger.log(`GET /vehicles/search?q=${q}&page=${pageNum}&limit=${limitNum}`);
+
+    const [vehicles, total] = await Promise.all([
+      this.vehicleService.search(q.trim(), pageNum, limitNum),
+      this.vehicleService.searchCount(q.trim()),
+    ]);
+
+    const pagination = buildPaginationMeta(total, pageNum, limitNum);
+
+    return {
+      query: q.trim(),
+      pagination,
+      vehicles: vehicles.map(mapVehicleToResponse),
+    };
+  }
+
+  @Get('sources')
+  @ApiOperation({ summary: 'List all official sources used for vehicle data collection' })
+  @ApiResponse({ status: 200, description: 'List of source URLs' })
+  async findAllSources() {
+    this.logger.log('GET /vehicles/sources');
+    const sources = await this.vehicleService.getAllSources();
+
+    const uniqueSources = new Map<string, typeof sources[0]>();
+    for (const source of sources) {
+      if (!uniqueSources.has(source.modelo_url)) {
+        uniqueSources.set(source.modelo_url, source);
+      }
+    }
+
+    return {
+      total: uniqueSources.size,
+      base_url: 'https://www.ford.com.br/',
+      fontes: [...uniqueSources.values()].map((s) => ({
+        modelo_url: s.modelo_url,
+        versao_url: s.versao_url,
+        ficha_tecnica_url: s.ficha_tecnica_url,
+        cores_url: s.cores_url,
+      })),
+    };
+  }
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Get aggregated statistics about the vehicle catalog' })
+  @ApiResponse({ status: 200, description: 'Catalog statistics' })
+  async getStats() {
+    this.logger.log('GET /vehicles/stats');
+    const stats = await this.vehicleService.getStats();
+
+    return {
+      brand: 'Ford',
+      market: 'Brasil',
+      generated_at: new Date().toISOString(),
+      ...stats,
+    };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a vehicle by ID or slug' })
   @ApiParam({ name: 'id', description: 'Vehicle UUID or slug' })
@@ -93,7 +235,6 @@ export class VehicleController {
   async findOne(@Param('id') id: string) {
     this.logger.log(`GET /vehicles/${id}`);
 
-    // Try by UUID first, then by slug
     let vehicle = await this.vehicleService.findById(id);
     if (!vehicle) {
       vehicle = await this.vehicleService.findBySlug(id);

@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service.js';
-import { ScrapperService } from '../scrapper/application/scrapper.js';
-import { VehicleService } from '../vehicle/application/vehicle/vehicle.service.js';
-import { mapVehicleInfoToDto } from '../vehicle/application/mappers/vehicle-info.mapper.js';
+import { PrismaService } from '../../../prisma/prisma.service.js';
+import { ScrapperService } from '../../scrapper/application/scrapper.js';
+import { VehicleService } from '../application/vehicle/vehicle.service.js';
+import { mapVehicleInfoToDto } from '../application/mappers/vehicle-info.mapper.js';
 
 @Injectable()
 export class SyncService {

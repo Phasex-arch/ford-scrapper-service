@@ -26,15 +26,8 @@ async function bootstrap() {
     )
     .setVersion('1.0.0')
     .addTag('Health', 'Health check do serviço')
-    .addTag('Vehicles', 'Consulta e filtro de veículos')
-    .addTag('Categories', 'Categorias de veículos')
-    .addTag('Colors', 'Cores disponíveis')
-    .addTag('Models', 'Modelos de veículos')
-    .addTag('Versions', 'Versões de veículos')
-    .addTag('Search', 'Busca textual')
+    .addTag('Vehicles', 'Consulta, filtro, categorias, cores, modelos, versões, busca, fontes e estatísticas de veículos')
     .addTag('Sync', 'Sincronização de dados com o site oficial')
-    .addTag('Sources', 'Fontes oficiais utilizadas')
-    .addTag('Stats', 'Estatísticas do catálogo')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
