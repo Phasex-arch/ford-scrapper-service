@@ -89,3 +89,257 @@ model SyncRun {
   completedAt   DateTime?
   durationMs    Int?
 }
+
+// =====================================================================
+// Seguranca, Colaboradores e Auditoria
+// =====================================================================
+
+enum Role {
+  ADMIN
+  GERENTE
+  FUNCIONARIO
+}
+
+model Colaborador {
+  id        String     @id @default(uuid())
+  nome      String
+  cpf       String     @unique
+  telefone  String
+  email     String     @unique
+  endereco  String
+  registro  String     @unique
+  cargo     String
+  role      Role       @default(FUNCIONARIO)
+  senha     String
+  ativo     Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  auditLogs AuditLog[]
+
+  @@index([email])
+  @@index([registro])
+  @@index([ativo])
+}
+
+model AuditLog {
+  id         String       @id @default(uuid())
+  userId     String?
+  userEmail  String?
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ip         String?
+  userAgent  String?
+  statusCode Int?
+  timestamp  DateTime     @default(now())
+  user       Colaborador? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([resource])
+  @@index([action])
+  @@index([timestamp])
+}
+
+// =====================================================================
+// Entidades de negocio (espelhadas em src/exampleData)
+// =====================================================================
+
+enum ClienteStatus {
+  ATIVO
+  INATIVO
+  POTENCIAL
+}
+
+model Cliente {
+  id            String        @id @default(uuid())
+  codigo        String        @unique
+  nome          String
+  telefone      String
+  email         String
+  ultimaVisita  DateTime?
+  status        ClienteStatus @default(ATIVO)
+  veiculosCount Int           @default(0)
+  ltv           Float         @default(0)
+  iniciais      String
+  segmento      String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+  @@index([segmento])
+  @@index([nome])
+}
+
+model Avaliacao {
+  id        String   @id @default(uuid())
+  cliente   String
+  nota      Int
+  data      String
+  texto     String
+  detalhe   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([nota])
+}
+
+enum CondicaoVeiculo {
+  NOVO
+  SEMINOVO
+}
+
+enum SegmentoVeiculo {
+  SUV
+  PICAPE
+  SEDAN
+  HATCH
+  OUTRO
+}
+
+model EstoqueVeiculo {
+  id          String          @id @default(uuid())
+  codigo      String          @unique
+  modelo      String
+  versao      String
+  ano         String
+  motor       String
+  transmissao String
+  condicao    CondicaoVeiculo
+  status      String          @default("Disponivel")
+  preco       Float
+  segmento    SegmentoVeiculo
+  cor         String
+  imagem      String?
+  quantidade  Int             @default(1)
+  km          String?
+  opcionais   String[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([modelo])
+  @@index([condicao])
+  @@index([status])
+  @@index([segmento])
+}
+
+enum FinanciamentoStatus {
+  APROVADO
+  ANALISE
+  PENDENTE
+  REPROVADO
+}
+
+model Financiamento {
+  id          String              @id @default(uuid())
+  codigo      String              @unique
+  clienteNome String
+  iniciais    String
+  veiculo     String
+  valor       Float
+  entrada     Float
+  prazo       Int
+  taxa        Float
+  parcela     Float
+  status      FinanciamentoStatus @default(ANALISE)
+  data        String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([status])
+  @@index([clienteNome])
+}
+
+enum LeadUrgencia {
+  URGENTE
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+model Lead {
+  id               String       @id @default(uuid())
+  codigo           String       @unique
+  clienteNome      String
+  iniciais         String
+  veiculoInteresse String
+  necessidade      String
+  urgencia         LeadUrgencia @default(MEDIA)
+  valorEstimado    Float
+  telefone         String
+  insight          String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([urgencia])
+  @@index([clienteNome])
+}
+
+model Meta {
+  id            String   @id @default(uuid())
+  codigo        String   @unique
+  titulo        String
+  periodo       String
+  indicador     String
+  atual         Float
+  alvo          Float
+  unidade       String
+  responsavel   String
+  lowerIsBetter Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([indicador])
+  @@index([periodo])
+}
+
+enum OrdemServicoStatus {
+  PREVISTO
+  ANDAMENTO
+  CONCLUIDO
+  CANCELADO
+}
+
+enum OrdemServicoPrioridade {
+  OK
+  RISCO
+  ATRASADO
+}
+
+model OrdemServico {
+  id         String                 @id @default(uuid())
+  numero     String                 @unique
+  cliente    String
+  veiculo    String
+  tipo       String
+  tecnico    String
+  prazo      String
+  prioridade OrdemServicoPrioridade @default(OK)
+  valor      String
+  status     OrdemServicoStatus     @default(PREVISTO)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  @@index([status])
+  @@index([tecnico])
+}
+
+enum TecnicoStatus {
+  LIVRE
+  OCUPADO
+  PAUSA
+  AUSENTE
+}
+
+model Tecnico {
+  id            String        @id @default(uuid())
+  nome          String
+  iniciais      String
+  especialidade String
+  status        TecnicoStatus @default(LIVRE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+  @@index([especialidade])
+}
