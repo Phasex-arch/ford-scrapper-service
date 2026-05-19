@@ -27,7 +27,9 @@ export class PdfTextExtractorService {
       return [];
     }
 
-    this.logger.log(`Extracted ${text.length} chars from PDF, parsing locally...`);
+    this.logger.log(
+      `Extracted ${text.length} chars from PDF, parsing locally...`,
+    );
     return this.parseVehicleText(text, context);
   }
 
@@ -36,39 +38,50 @@ export class PdfTextExtractorService {
     context?: { modelName?: string; category?: string },
   ): GeminiVehicleExtract[] {
     const modelName = context?.modelName ?? this.extractModelName(text);
-    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const lines = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
 
-    const powerCv = this.findNumber(text, /pot[eê]ncia[:\s]*(\d+)\s*cv/i)
-      ?? this.findNumber(text, /(\d+)\s*cv/i);
-    const torqueNm = this.findNumber(text, /torque[:\s]*(\d+)\s*nm/i)
-      ?? this.findNumber(text, /(\d+)\s*nm/i);
+    const powerCv =
+      this.findNumber(text, /pot[eê]ncia[:\s]*(\d+)\s*cv/i) ??
+      this.findNumber(text, /(\d+)\s*cv/i);
+    const torqueNm =
+      this.findNumber(text, /torque[:\s]*(\d+)\s*nm/i) ??
+      this.findNumber(text, /(\d+)\s*nm/i);
     const traction = this.findPattern(text, /tra[çc][aã]o[:\s]*([^\n,]+)/i);
-    const transmission = this.findPattern(text, /transmiss[aã]o[:\s]*([^\n,]+)/i);
+    const transmission = this.findPattern(
+      text,
+      /transmiss[aã]o[:\s]*([^\n,]+)/i,
+    );
     const motorDesc = this.findPattern(text, /motor[:\s]*([^\n]{5,60})/i);
     const fuel = this.detectFuel(text);
     const price = this.findPrice(text);
-    const year = this.findNumber(text, /ano[- ]?modelo[:\s]*(\d{4})/i)
-      ?? this.findNumber(text, /\b(202[4-9])\b/);
+    const year =
+      this.findNumber(text, /ano[- ]?modelo[:\s]*(\d{4})/i) ??
+      this.findNumber(text, /\b(202[4-9])\b/);
     const colors = this.extractColors(lines);
     const versions = this.extractVersionNames(lines, modelName);
 
     if (versions.length === 0) {
-      return [{
-        modelo: modelName,
-        versao: 'Base',
-        ano_modelo: year,
-        tipo_veiculo: context?.category ?? null,
-        preco_inicial: price,
-        motorizacao: {
-          descricao: motorDesc,
-          combustivel: fuel,
-          potencia_cv: powerCv,
-          torque_nm: torqueNm,
-          tracao: traction,
-          transmissao: transmission,
+      return [
+        {
+          modelo: modelName,
+          versao: 'Base',
+          ano_modelo: year,
+          tipo_veiculo: context?.category ?? null,
+          preco_inicial: price,
+          motorizacao: {
+            descricao: motorDesc,
+            combustivel: fuel,
+            potencia_cv: powerCv,
+            torque_nm: torqueNm,
+            tracao: traction,
+            transmissao: transmission,
+          },
+          cores: colors.map((c) => ({ nome: c, codigo: null })),
         },
-        cores: colors.map((c) => ({ nome: c, codigo: null })),
-      }];
+      ];
     }
 
     return versions.map((v) => ({
@@ -90,7 +103,9 @@ export class PdfTextExtractorService {
   }
 
   private extractModelName(text: string): string {
-    const match = text.match(/(?:ford\s+)?([A-Z][a-záéíóúãõ]+(?:\s+[A-Z][a-záéíóúãõ]*)*)/);
+    const match = text.match(
+      /(?:ford\s+)?([A-Z][a-záéíóúãõ]+(?:\s+[A-Z][a-záéíóúãõ]*)*)/,
+    );
     return match?.[1] ?? 'Ford';
   }
 

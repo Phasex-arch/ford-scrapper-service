@@ -1,10 +1,12 @@
-import { Controller, Get, Query, Logger, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Logger, Query } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { VehicleService } from '../vehicle/application/vehicle/vehicle.service.js';
 import {
-  mapVehicleToResponse,
   buildPaginationMeta,
+  mapVehicleToResponse,
 } from '../vehicle/application/dto/vehicle-response.dto.js';
+import { SearchQueryDto } from './dto/search-query.dto.js';
+import { stripXss } from '../common/sanitizers/string.sanitizer.js';
 
 @ApiTags('Search')
 @Controller('search')
@@ -14,35 +16,29 @@ export class SearchController {
   constructor(private readonly vehicleService: VehicleService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Search vehicles by text query across multiple fields' })
-  @ApiQuery({ name: 'q', required: true, description: 'Search query text' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20)' })
+  @ApiOperation({
+    summary: 'Search vehicles by text query across multiple fields',
+  })
   @ApiResponse({ status: 200, description: 'Search results with pagination' })
-  @ApiResponse({ status: 400, description: 'Missing query parameter' })
-  async search(
-    @Query('q') q?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    if (!q || q.trim().length === 0) {
-      throw new BadRequestException('Query parameter "q" is required');
-    }
+  @ApiResponse({
+    status: 400,
+    description: 'Missing or invalid query parameter',
+  })
+  async search(@Query() query: SearchQueryDto) {
+    const sanitized = stripXss(query.q).trim();
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
 
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
-
-    this.logger.log(`GET /search?q=${q}&page=${pageNum}&limit=${limitNum}`);
+    this.logger.log(`GET /search?q=<redacted>&page=${page}&limit=${limit}`);
 
     const [vehicles, total] = await Promise.all([
-      this.vehicleService.search(q.trim(), pageNum, limitNum),
-      this.vehicleService.searchCount(q.trim()),
+      this.vehicleService.search(sanitized, page, limit),
+      this.vehicleService.searchCount(sanitized),
     ]);
-
-    const pagination = buildPaginationMeta(total, pageNum, limitNum);
+    const pagination = buildPaginationMeta(total, page, limit);
 
     return {
-      query: q.trim(),
+      query: sanitized,
       pagination,
       vehicles: vehicles.map(mapVehicleToResponse),
     };

@@ -10,7 +10,9 @@ export class ModelsController {
   constructor(private readonly vehicleService: VehicleService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List all distinct vehicle models with family and count' })
+  @ApiOperation({
+    summary: 'List all distinct vehicle models with family and count',
+  })
   @ApiResponse({ status: 200, description: 'List of models' })
   async findAll() {
     this.logger.log('GET /models');

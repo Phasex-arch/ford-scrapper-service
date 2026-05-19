@@ -96,7 +96,11 @@ export function mapVehicleToResponse(vehicle: Vehicle): VehicleResponseItem {
   };
 }
 
-export function buildPaginationMeta(total: number, page: number, limit: number): PaginationMeta {
+export function buildPaginationMeta(
+  total: number,
+  page: number,
+  limit: number,
+): PaginationMeta {
   const totalPages = Math.ceil(total / limit);
   return {
     total,

@@ -84,8 +84,16 @@ export class ScrapperService {
     try {
       modelData = await this.crawler.crawlModelPage(modelPageUrl);
     } catch (err) {
-      this.logger.error(`Failed to crawl model page: ${modelPageUrl}`, (err as Error).message);
-      modelData = { fichaTecnicaPdfUrl: null, versionUrls: [], colors: [], imageUrls: [] };
+      this.logger.error(
+        `Failed to crawl model page: ${modelPageUrl}`,
+        (err as Error).message,
+      );
+      modelData = {
+        fichaTecnicaPdfUrl: null,
+        versionUrls: [],
+        colors: [],
+        imageUrls: [],
+      };
     }
 
     // --- Tier 1: PDF link found directly in HTML ---
@@ -115,13 +123,21 @@ export class ScrapperService {
 
     // --- No PDF at all → Tier 5: HTML scrape ---
     if (!base64) {
-      this.logger.warn(`No PDF obtainable for ${primary.name}, falling back to HTML scrape`);
+      this.logger.warn(
+        `No PDF obtainable for ${primary.name}, falling back to HTML scrape`,
+      );
       return this.processWithHtml(entries, modelData, modelPageUrl);
     }
 
     // --- Tier 3: try Gemini extraction ---
     modelData.fichaTecnicaPdfUrl = pdfUrl;
-    return this.processWithPdf(primary, entries, modelData, modelPageUrl, base64);
+    return this.processWithPdf(
+      primary,
+      entries,
+      modelData,
+      modelPageUrl,
+      base64,
+    );
   }
 
   private async processWithPdf(
@@ -139,7 +155,13 @@ export class ScrapperService {
 
       if (extracts.length > 0) {
         return extracts.map((extract) =>
-          this.buildVehicleFromExtract(extract, entry, modelData, modelPageUrl, null),
+          this.buildVehicleFromExtract(
+            extract,
+            entry,
+            modelData,
+            modelPageUrl,
+            null,
+          ),
         );
       }
     } catch (err) {
@@ -150,22 +172,38 @@ export class ScrapperService {
 
     // --- Tier 4: local PDF parse with pdf-parse ---
     try {
-      const localExtracts = await this.pdfTextExtractor.extractFromBase64(base64, {
-        modelName: entry.name,
-        category: entry.category,
-      });
+      const localExtracts = await this.pdfTextExtractor.extractFromBase64(
+        base64,
+        {
+          modelName: entry.name,
+          category: entry.category,
+        },
+      );
 
       if (localExtracts.length > 0) {
-        this.logger.log(`Tier 4: local PDF parse produced ${localExtracts.length} version(s)`);
+        this.logger.log(
+          `Tier 4: local PDF parse produced ${localExtracts.length} version(s)`,
+        );
         return localExtracts.map((extract) =>
-          this.buildVehicleFromExtract(extract, entry, modelData, modelPageUrl, LOCAL_PARSE_WARNING),
+          this.buildVehicleFromExtract(
+            extract,
+            entry,
+            modelData,
+            modelPageUrl,
+            LOCAL_PARSE_WARNING,
+          ),
         );
       }
     } catch (err) {
-      this.logger.error(`Tier 4 (local parse) also failed for ${entry.name}`, (err as Error).message);
+      this.logger.error(
+        `Tier 4 (local parse) also failed for ${entry.name}`,
+        (err as Error).message,
+      );
     }
 
-    this.logger.warn(`All PDF tiers exhausted for ${entry.name}, falling back to HTML`);
+    this.logger.warn(
+      `All PDF tiers exhausted for ${entry.name}, falling back to HTML`,
+    );
     return this.processWithHtml(allEntries, modelData, modelPageUrl);
   }
 
@@ -185,7 +223,8 @@ export class ScrapperService {
       familia: extract.modelo ?? entry.name,
       modelo: extract.modelo ?? entry.name,
       versao: extract.versao ?? 'Base',
-      ano_modelo: extract.ano_modelo ?? entry.modelYear ?? new Date().getFullYear(),
+      ano_modelo:
+        extract.ano_modelo ?? entry.modelYear ?? new Date().getFullYear(),
       status: 'Ativo',
       preco_inicial: extract.preco_inicial ?? entry.price,
       moeda: 'BRL',
@@ -227,8 +266,12 @@ export class ScrapperService {
         : entries.filter((e) => e.versionPageUrl).map((e) => e.versionPageUrl!);
 
     if (versionUrls.length === 0) {
-      this.logger.warn(`No version URLs found for ${entries[0].name}, building from catalog data`);
-      return entries.map((entry) => this.buildVehicleFromCatalog(entry, modelData, modelPageUrl));
+      this.logger.warn(
+        `No version URLs found for ${entries[0].name}, building from catalog data`,
+      );
+      return entries.map((entry) =>
+        this.buildVehicleFromCatalog(entry, modelData, modelPageUrl),
+      );
     }
 
     const vehicles: VehicleInfo[] = [];
@@ -248,7 +291,9 @@ export class ScrapperService {
           modelo: entry.name,
           versao: versionData.versionName || entry.brVersion || 'Base',
           ano_modelo:
-            versionData.modelYear ?? entry.modelYear ?? new Date().getFullYear(),
+            versionData.modelYear ??
+            entry.modelYear ??
+            new Date().getFullYear(),
           status: 'Ativo',
           preco_inicial: versionData.price ?? entry.price,
           moeda: 'BRL',
@@ -260,13 +305,14 @@ export class ScrapperService {
             tracao: versionData.motorInfo.traction,
             transmissao: versionData.motorInfo.transmission,
           },
-          cores: (versionData.colors.length > 0 ? versionData.colors : modelData.colors).map(
-            (c) => ({
-              nome: c,
-              codigo: null,
-              disponibilidade: 'Disponível',
-            }),
-          ),
+          cores: (versionData.colors.length > 0
+            ? versionData.colors
+            : modelData.colors
+          ).map((c) => ({
+            nome: c,
+            codigo: null,
+            disponibilidade: 'Disponível',
+          })),
           imagens: modelData.imageUrls.slice(0, 3).map((url, idx) => ({
             tipo: idx === 0 ? 'principal' : 'galeria',
             url,
@@ -280,7 +326,10 @@ export class ScrapperService {
           observacao: HTML_WARNING,
         });
       } catch (err) {
-        this.logger.error(`Failed to crawl version: ${versionUrl}`, (err as Error).message);
+        this.logger.error(
+          `Failed to crawl version: ${versionUrl}`,
+          (err as Error).message,
+        );
       }
     }
 

@@ -30,7 +30,8 @@ export class FordCrawlerService {
     const res = await fetch(url, {
       headers: {
         'User-Agent': UA,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
       },
     });
@@ -46,7 +47,9 @@ export class FordCrawlerService {
   private isVehiclePageUrl(url: string): boolean {
     const path = new URL(url).pathname;
     return (
-      /^\/(picapes|suvs-e-crossovers|performance|veiculos-comerciais)\//.test(path) ||
+      /^\/(picapes|suvs-e-crossovers|performance|veiculos-comerciais)\//.test(
+        path,
+      ) ||
       /\/hibridos\//.test(path) ||
       /\/content\/ford\/br\/pt_br\/home\/hibridos\//.test(path)
     );
@@ -54,7 +57,10 @@ export class FordCrawlerService {
 
   private isVersionPageUrl(url: string): boolean {
     const path = new URL(url).pathname;
-    return path.includes('/compare-as-versoes/') || path.split('/').filter(Boolean).length > 2;
+    return (
+      path.includes('/compare-as-versoes/') ||
+      path.split('/').filter(Boolean).length > 2
+    );
   }
 
   private categoryFromUrl(url: string): string {
@@ -62,7 +68,8 @@ export class FordCrawlerService {
     for (const [segment, cat] of Object.entries(CATEGORY_MAP)) {
       if (path.includes(`/${segment}/`)) return cat;
     }
-    if (path.includes('/hibridos/') || path.includes('/hibridos')) return 'Eletrificação';
+    if (path.includes('/hibridos/') || path.includes('/hibridos'))
+      return 'Eletrificação';
     return 'Outros';
   }
 
@@ -146,7 +153,9 @@ export class FordCrawlerService {
         name,
         category,
         price,
-        modelPageUrl: isVersion ? this.modelPageUrlFromVersionUrl(fullUrl) : fullUrl,
+        modelPageUrl: isVersion
+          ? this.modelPageUrlFromVersionUrl(fullUrl)
+          : fullUrl,
         versionPageUrl: isVersion ? fullUrl : null,
         modelYear,
         brVersion,
@@ -165,7 +174,12 @@ export class FordCrawlerService {
       html = await this.fetchPage(url);
     } catch {
       this.logger.warn(`Failed to fetch model page: ${url}`);
-      return { fichaTecnicaPdfUrl: null, versionUrls: [], colors: [], imageUrls: [] };
+      return {
+        fichaTecnicaPdfUrl: null,
+        versionUrls: [],
+        colors: [],
+        imageUrls: [],
+      };
     }
 
     const $ = cheerio.load(html);
@@ -186,7 +200,8 @@ export class FordCrawlerService {
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '');
-      const textMatch = normalized.includes('ficha tecnica') && href.endsWith('.pdf');
+      const textMatch =
+        normalized.includes('ficha tecnica') && href.endsWith('.pdf');
 
       if (hrefMatch || textMatch) {
         fichaTecnicaPdfUrl = this.resolveUrl(href);
@@ -288,7 +303,9 @@ export class FordCrawlerService {
           $prev = $(table).parent().prev();
           continue;
         }
-        const heading = $prev.find('h3, h4, strong').first().text().trim() || $prev.text().trim();
+        const heading =
+          $prev.find('h3, h4, strong').first().text().trim() ||
+          $prev.text().trim();
         if (heading && heading.length < 60) {
           sectionName = heading.toUpperCase();
           break;
@@ -368,7 +385,10 @@ export class FordCrawlerService {
       if (keyLower.includes('tração') || keyLower.includes('tracao')) {
         info.traction = value || null;
       }
-      if (keyLower.includes('transmissão') || keyLower.includes('transmissao')) {
+      if (
+        keyLower.includes('transmissão') ||
+        keyLower.includes('transmissao')
+      ) {
         info.transmission = value || null;
       }
       if (
@@ -395,7 +415,10 @@ export class FordCrawlerService {
     return info;
   }
 
-  buildCandidatePdfUrls(modelPageUrl: string, modelYear: number | null): string[] {
+  buildCandidatePdfUrls(
+    modelPageUrl: string,
+    modelYear: number | null,
+  ): string[] {
     const parsed = new URL(modelPageUrl);
     const segments = parsed.pathname.split('/').filter(Boolean);
     const slug = (segments[1] ?? segments[0] ?? '')
@@ -411,17 +434,26 @@ export class FordCrawlerService {
     ];
     const uniqueYears = [...new Set(years)];
 
-    const folderVariants = [slug, `nova-geracao-${slug}`, `novo-${slug}`, `nova-${slug}`];
+    const folderVariants = [
+      slug,
+      `nova-geracao-${slug}`,
+      `novo-${slug}`,
+      `nova-${slug}`,
+    ];
     const cdnBase = `${BASE_URL}/content/dam/Ford/website-assets/latam/br/nameplate`;
 
     const candidates: string[] = [];
     for (const year of uniqueYears) {
       for (const folder of folderVariants) {
-        candidates.push(`${cdnBase}/${year}/${folder}/pdf/fbr-${slug}-ficha-tecnica.pdf`);
+        candidates.push(
+          `${cdnBase}/${year}/${folder}/pdf/fbr-${slug}-ficha-tecnica.pdf`,
+        );
       }
     }
 
-    this.logger.debug(`Generated ${candidates.length} candidate PDF URLs for ${slug}`);
+    this.logger.debug(
+      `Generated ${candidates.length} candidate PDF URLs for ${slug}`,
+    );
     return candidates;
   }
 

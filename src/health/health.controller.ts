@@ -1,13 +1,15 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Public } from '../common/decorators/public.decorator.js';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
   private readonly startedAt = new Date();
 
+  @Public()
   @Get()
-  @ApiOperation({ summary: 'API health check' })
+  @ApiOperation({ summary: 'API health check (public)' })
   @ApiResponse({ status: 200, description: 'Service is healthy' })
   check() {
     const uptimeMs = Date.now() - this.startedAt.getTime();

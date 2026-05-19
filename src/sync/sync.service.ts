@@ -12,7 +12,7 @@ export class SyncService {
     private readonly prisma: PrismaService,
     private readonly scrapperService: ScrapperService,
     private readonly vehicleService: VehicleService,
-  ) { }
+  ) {}
 
   async executeSyncRun() {
     const syncRun = await this.prisma.syncRun.create({

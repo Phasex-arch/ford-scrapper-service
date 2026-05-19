@@ -10,14 +10,16 @@ export class SourcesController {
   constructor(private readonly vehicleService: VehicleService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List all official sources used for vehicle data collection' })
+  @ApiOperation({
+    summary: 'List all official sources used for vehicle data collection',
+  })
   @ApiResponse({ status: 200, description: 'List of source URLs' })
   async findAll() {
     this.logger.log('GET /sources');
     const sources = await this.vehicleService.getAllSources();
 
     // Deduplicate by modelo_url
-    const uniqueSources = new Map<string, typeof sources[0]>();
+    const uniqueSources = new Map<string, (typeof sources)[0]>();
     for (const source of sources) {
       if (!uniqueSources.has(source.modelo_url)) {
         uniqueSources.set(source.modelo_url, source);

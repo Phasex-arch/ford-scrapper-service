@@ -72,7 +72,9 @@ export class GeminiReaderService {
     const elapsed = Date.now() - this.lastCallAt;
     if (elapsed < MIN_INTERVAL_MS) {
       const wait = MIN_INTERVAL_MS - elapsed;
-      this.logger.debug(`Rate limiter: waiting ${wait}ms before next Gemini call`);
+      this.logger.debug(
+        `Rate limiter: waiting ${wait}ms before next Gemini call`,
+      );
       await new Promise((r) => setTimeout(r, wait));
     }
     this.lastCallAt = Date.now();
@@ -123,7 +125,10 @@ export class GeminiReaderService {
         this.logger.log(`Gemini extracted ${parsed.length} version(s)`);
         return parsed;
       } catch (error) {
-        this.logger.error(`Gemini attempt ${attempt} failed`, (error as Error).message);
+        this.logger.error(
+          `Gemini attempt ${attempt} failed`,
+          (error as Error).message,
+        );
         if (attempt === 2) throw error;
       }
     }
@@ -149,7 +154,10 @@ export class GeminiReaderService {
       if (!Array.isArray(parsed)) return [parsed];
       return parsed;
     } catch (e) {
-      this.logger.error('Failed to parse Gemini JSON response', cleaned.substring(0, 200));
+      this.logger.error(
+        'Failed to parse Gemini JSON response',
+        cleaned.substring(0, 200),
+      );
       return [];
     }
   }

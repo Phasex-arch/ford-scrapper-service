@@ -89,3 +89,72 @@ model SyncRun {
   completedAt   DateTime?
   durationMs    Int?
 }
+
+enum Role {
+  ADMIN
+  ANALISTA
+  USER
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(USER)
+  refreshHash  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now()) @updatedAt
+  auditLogs    AuditLog[]
+  leads        Lead[]     @relation("LeadCreatedBy")
+
+  @@index([email])
+  @@index([role])
+}
+
+model Lead {
+  id              String    @id @default(uuid())
+  nome            String
+  email           String
+  cpfEncrypted    String
+  cpfHash         String    @unique
+  telefoneEnc     String
+  vinSharePseudo  String
+  consent         Boolean   @default(false)
+  consentAt       DateTime?
+  retainUntil     DateTime
+  anonymizedAt    DateTime?
+  createdBy       String
+  createdByUser   User      @relation("LeadCreatedBy", fields: [createdBy], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  @@index([retainUntil])
+  @@index([createdBy])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  resource  String?
+  ip        String?
+  userAgent String?
+  traceId   String?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model IdempotencyKey {
+  key       String   @id
+  userId    String?
+  route     String
+  response  Json
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
