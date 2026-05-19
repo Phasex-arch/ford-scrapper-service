@@ -1,20 +1,22 @@
 import {
   Controller,
   Get,
-  HttpCode,
-  HttpStatus,
   Logger,
   Post,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ScrapperService } from '../application/scrapper.js';
 import type { FordCatalogResponse } from '../domain/scrapped-info.js';
 import { VehicleService } from '../../vehicle/application/vehicle/vehicle.service.js';
 import { mapVehicleInfoToDto } from '../../vehicle/application/mappers/vehicle-info.mapper.js';
-import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
 
+/**
+ * Endpoints administrativos do scraper.
+ * Toda rota fica protegida pelo `JwtAuthGuard` global; clientes precisam
+ * apresentar `Authorization: Bearer <token>` para disparar uma coleta.
+ */
 @ApiTags('Scrapper')
+@ApiBearerAuth('JWT')
 @Controller('scrapper')
 export class ScrapperController {
   private readonly logger = new Logger(ScrapperController.name);
@@ -25,9 +27,8 @@ export class ScrapperController {
   ) {}
 
   @Get('ford')
-  @Roles(Role.ADMIN)
   @ApiOperation({
-    summary: 'Trigger Ford scraping and return collected data (ADMIN only)',
+    summary: 'Dispara o scraping da Ford e devolve o catálogo coletado',
   })
   async scrapeFord(): Promise<FordCatalogResponse> {
     this.logger.log('Ford scraping triggered via GET /scrapper/ford');
@@ -40,10 +41,10 @@ export class ScrapperController {
     return result;
   }
 
-  @Post('ford')
-  @Roles(Role.ADMIN)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Scrape Ford and persist results (ADMIN only)' })
+  @Post('sync')
+  @ApiOperation({
+    summary: 'Sincroniza o resultado do scraper diretamente no banco',
+  })
   async syncDataFromScrapper(): Promise<void> {
     this.logger.log('Syncing data from scrapper');
     const result = await this.scrapperService.scrapeAll();

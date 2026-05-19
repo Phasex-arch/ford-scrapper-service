@@ -5,119 +5,117 @@ import {
   Logger,
   NestInterceptor,
 } from '@nestjs/common';
-import { Observable, tap } from 'rxjs';
 import type { Request } from 'express';
-import { AuditService } from '../../audit/audit.service.js';
-import type { AuthenticatedUser } from '../decorators/current-user.decorator.js';
+import { Observable, tap } from 'rxjs';
+import { PrismaService } from '../../../prisma/prisma.service.js';
 
-const AUDITED_PATTERNS: { method: string; path: RegExp; action: string }[] = [
-  { method: 'POST', path: /^\/api\/v1\/auth\/login$/, action: 'AUTH_LOGIN' },
-  {
-    method: 'POST',
-    path: /^\/api\/v1\/auth\/register$/,
-    action: 'AUTH_REGISTER',
-  },
-  {
-    method: 'POST',
-    path: /^\/api\/v1\/auth\/refresh$/,
-    action: 'AUTH_REFRESH',
-  },
-  { method: 'POST', path: /^\/api\/v1\/auth\/logout$/, action: 'AUTH_LOGOUT' },
-  { method: 'POST', path: /^\/api\/v1\/leads/, action: 'LEAD_CREATE' },
-  { method: 'PATCH', path: /^\/api\/v1\/leads/, action: 'LEAD_UPDATE' },
-  { method: 'DELETE', path: /^\/api\/v1\/leads/, action: 'LEAD_DELETE' },
-  {
-    method: 'POST',
-    path: /^\/api\/v1\/leads\/[^/]+\/anonymize$/,
-    action: 'LEAD_ANONYMIZE',
-  },
-  { method: 'POST', path: /^\/api\/v1\/sync/, action: 'SYNC_RUN' },
-  {
-    method: 'POST',
-    path: /^\/api\/v1\/scrapper\/ford$/,
-    action: 'SCRAPPER_RUN',
-  },
-];
+interface AuthenticatedRequest extends Request {
+  user?: { id: string; email: string; role: string };
+}
 
-/**
- * Persists an `AuditLog` row for sensitive routes (slide 25 "audit trail
- * para ações críticas"). Captures actor, IP, user agent, trace id and
- * resulting HTTP status; payload bodies are NOT stored to avoid leaking PII.
- */
+const TRACKED_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
   private readonly logger = new Logger(AuditInterceptor.name);
 
-  constructor(private readonly audit: AuditService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const http = context.switchToHttp();
-    const request = http.getRequest<
-      Request & { traceId?: string; user?: AuthenticatedUser }
-    >();
+    const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const method = req.method;
 
-    const match = AUDITED_PATTERNS.find(
-      (p) => p.method === request.method && p.path.test(request.path),
-    );
-    if (!match) return next.handle();
+    if (!TRACKED_METHODS.has(method)) {
+      return next.handle();
+    }
 
-    const startedAt = Date.now();
     return next.handle().pipe(
       tap({
-        next: () => {
-          void this.write(
-            request,
-            match.action,
-            'SUCCESS',
-            Date.now() - startedAt,
-          );
+        next: (data) => {
+          void this.persist(req, context, data, null);
         },
-        error: (err: unknown) => {
-          void this.write(
-            request,
-            match.action,
-            'FAILURE',
-            Date.now() - startedAt,
-            err instanceof Error ? err.message : 'unknown_error',
-          );
+        error: (err: Error) => {
+          void this.persist(req, context, null, err);
         },
       }),
     );
   }
 
-  private async write(
-    request: Request & { traceId?: string; user?: AuthenticatedUser },
-    action: string,
-    outcome: 'SUCCESS' | 'FAILURE',
-    durationMs: number,
-    errorReason?: string,
+  private async persist(
+    req: AuthenticatedRequest,
+    context: ExecutionContext,
+    data: unknown,
+    error: Error | null,
   ): Promise<void> {
     try {
-      await this.audit.record({
-        userId: request.user?.id ?? null,
-        action,
-        resource: request.path,
-        ip: this.extractIp(request),
-        userAgent: request.headers['user-agent'] ?? null,
-        traceId: request.traceId ?? null,
-        metadata: {
-          method: request.method,
-          outcome,
-          durationMs,
-          ...(errorReason ? { errorReason } : {}),
+      const handler = context.getHandler().name;
+      const controller = context.getClass().name;
+      const resource = controller
+        .replace(/Controller$/, '')
+        .toLowerCase();
+
+      const resourceId = this.extractResourceId(req, data);
+      const action = this.mapAction(req.method);
+      const ip = this.extractIp(req);
+
+      await this.prisma.auditLog.create({
+        data: {
+          userId: req.user?.id,
+          userEmail: req.user?.email,
+          action,
+          resource,
+          resourceId,
+          details: {
+            handler,
+            method: req.method,
+            path: req.originalUrl,
+            success: !error,
+            error: error?.message ?? null,
+          },
+          ip,
+          userAgent: req.headers['user-agent']?.toString().slice(0, 500),
+          statusCode: error ? 500 : 200,
         },
       });
     } catch (err) {
-      this.logger.warn(
-        `Failed to persist audit log for ${action}: ${(err as Error).message}`,
+      this.logger.error(
+        `Falha ao persistir audit log: ${(err as Error).message}`,
       );
     }
   }
 
-  private extractIp(request: Request): string | null {
-    const fwd = request.headers['x-forwarded-for'];
-    if (typeof fwd === 'string' && fwd.length > 0)
-      return fwd.split(',')[0].trim();
-    return request.ip ?? null;
+  private mapAction(method: string): string {
+    switch (method) {
+      case 'POST':
+        return 'CREATE';
+      case 'PATCH':
+      case 'PUT':
+        return 'UPDATE';
+      case 'DELETE':
+        return 'DELETE';
+      default:
+        return method;
+    }
+  }
+
+  private extractResourceId(
+    req: AuthenticatedRequest,
+    data: unknown,
+  ): string | undefined {
+    const params = req.params as Record<string, string> | undefined;
+    if (params?.id) return params.id;
+    if (data && typeof data === 'object' && 'id' in data) {
+      const id = (data as { id: unknown }).id;
+      if (typeof id === 'string') return id;
+    }
+    return undefined;
+  }
+
+  private extractIp(req: AuthenticatedRequest): string | undefined {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.length > 0) {
+      return forwarded.split(',')[0].trim();
+    }
+    return req.ip ?? req.socket.remoteAddress;
   }
 }

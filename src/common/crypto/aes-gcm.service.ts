@@ -22,34 +22,50 @@ const AUTH_TAG_LENGTH = 16;
 @Injectable()
 export class AesGcmService implements OnModuleInit {
   private readonly logger = new Logger(AesGcmService.name);
-  private key!: Buffer;
+  private key: Buffer | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit(): void {
     const raw = this.config.get<string>('DATA_ENCRYPTION_KEY');
     if (!raw) {
-      throw new Error(
-        'DATA_ENCRYPTION_KEY is required. Generate one with: openssl rand -base64 32',
+      this.logger.warn(
+        'DATA_ENCRYPTION_KEY ausente; AES-256-GCM em repouso ficará indisponível. Gere com: openssl rand -base64 32',
       );
+      return;
     }
     const decoded = Buffer.from(raw, 'base64');
     if (decoded.length !== KEY_LENGTH) {
-      throw new Error(
-        `DATA_ENCRYPTION_KEY must decode to ${KEY_LENGTH} bytes (got ${decoded.length}). ` +
-          'Generate with: openssl rand -base64 32',
+      this.logger.error(
+        `DATA_ENCRYPTION_KEY deve decodificar para ${KEY_LENGTH} bytes (recebido ${decoded.length}). Gere com: openssl rand -base64 32`,
       );
+      return;
     }
     this.key = decoded;
-    this.logger.log('AES-256-GCM key loaded');
+    this.logger.log('AES-256-GCM key carregada com sucesso');
+  }
+
+  /** Garante que a chave está disponível; usado por encrypt/decrypt. */
+  private requireKey(): Buffer {
+    if (!this.key) {
+      throw new Error(
+        'AES-256-GCM indisponível: defina DATA_ENCRYPTION_KEY (32 bytes base64) no ambiente',
+      );
+    }
+    return this.key;
+  }
+
+  isAvailable(): boolean {
+    return this.key !== null;
   }
 
   encrypt(plaintext: string): string {
     if (plaintext === null || plaintext === undefined) {
       throw new Error('Cannot encrypt null or undefined');
     }
+    const key = this.requireKey();
     const iv = randomBytes(IV_LENGTH);
-    const cipher = createCipheriv(ALGORITHM, this.key, iv);
+    const cipher = createCipheriv(ALGORITHM, key, iv);
     const enc = Buffer.concat([
       cipher.update(plaintext, 'utf8'),
       cipher.final(),
@@ -59,6 +75,7 @@ export class AesGcmService implements OnModuleInit {
   }
 
   decrypt(payload: string): string {
+    const key = this.requireKey();
     const raw = Buffer.from(payload, 'base64');
     if (raw.length < IV_LENGTH + AUTH_TAG_LENGTH) {
       throw new Error('Ciphertext too short / corrupted');
@@ -66,7 +83,7 @@ export class AesGcmService implements OnModuleInit {
     const iv = raw.subarray(0, IV_LENGTH);
     const authTag = raw.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
     const ciphertext = raw.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
-    const decipher = createDecipheriv(ALGORITHM, this.key, iv);
+    const decipher = createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
     const dec = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     return dec.toString('utf8');

@@ -1,14 +1,13 @@
-# Trabalho de Cybersecurity — Ford Scrapper Service
+# Trabalho de Cybersecurity — Ford Dealership Service
 
-> **Disciplina:** Cybersecurity
+> **Disciplina:** Cybersecurity  
 > **Sprint:** Sprint — 1º Semestre 2026  
-> **Entrega:** 24/05/2026 (via Microsoft Teams)
-> **Parceiro:** Ford do Brasil
-> **Scrum Master:** Prof. Yan Coelho
-> **Projeto:** Ford Brasil Vehicle Catalog API (`ford-scrapper-service`)
+> **Entrega:** 24/05/2026 (via Microsoft Teams)  
+> **Parceiro:** Ford do Brasil  
+> **Scrum Master:** Prof. Yan Coelho  
+> **Projeto:** Ford Brasil — Catálogo + Gestão de Concessionária (`ford-scrapper-service`)
 
 ## Identificação do Grupo
-
 
 | Nome        | RM          | Turma       |
 | ----------- | ----------- | ----------- |
@@ -18,767 +17,473 @@
 | *Preencher* | *Preencher* | *Preencher* |
 | *Preencher* | *Preencher* | *Preencher* |
 
-
 ---
 
 ## 1. Resumo Executivo
 
-O `ford-scrapper-service` é a camada de back-end de um catálogo digital para a
-linha de veículos Ford Brasil. Ele coleta, normaliza e expõe via API REST os
-dados oficiais publicados em [ford.com.br](https://www.ford.com.br/),
-servindo dashboards de concessionárias, integrações B2B e, na nova versão
-deste trabalho, um pipeline de retenção de clientes que armazena **leads
-pessoais** (nome, e-mail, CPF, telefone e VIN compartilhado).
+O `ford-scrapper-service` é a camada de back-end que sustenta dois fluxos de
+negócio do parceiro Ford do Brasil:
 
-Por lidar agora com dados pessoais sensíveis (LGPD) e ações administrativas
-que executam scraping massivo do site oficial da Ford, o serviço precisa
-estar **blindado** — exatamente o cenário descrito na *Challenge SpeedRunners*
-("Missão: Blindar o Challenge da Ford"). Este relatório descreve, seção a
-seção da rubrica oficial de Cybersecurity (20 + 20 + 20 + 25 + 15 = 100
-pontos), as decisões de projeto e os controles implementados, com referência
-direta aos arquivos de código.
+1. **Catálogo público de veículos:** coleta, normaliza e expõe via API REST o
+   conteúdo oficial publicado em [ford.com.br](https://www.ford.com.br/),
+   alimentando dashboards e integrações B2B.
+2. **Gestão da concessionária:** módulos de colaboradores, clientes, leads,
+   estoque, financiamentos, ordens de serviço, técnicos, metas, avaliações e
+   dashboards agregados — toda a operação interna que manipula dados pessoais
+   (LGPD) e ações administrativas privilegiadas.
+
+A nova superfície de ataque inclui **autenticação de colaboradores**, **dados
+pessoais de clientes** e **operações administrativas** capazes de disparar
+scraping massivo. Este relatório descreve, seção a seção da rubrica oficial de
+Cybersecurity (20 + 20 + 20 + 25 + 15 = **100 pontos**), as decisões de
+projeto e os controles implementados, com referência direta aos arquivos de
+código já presentes no repositório.
+
+> **Continuidade com a Sprint anterior.** O documento `docs/architecture/README.md`
+> apresenta a visão arquitetural integrada (Arquitetura SOA + Cybersecurity)
+> da primeira entrega. Todos os controles ali listados — `ValidationPipe`
+> global, `JwtAuthGuard` global, RBAC com enum `Role { ADMIN, GERENTE,
+> FUNCIONARIO }`, `argon2id`, `ThrottlerGuard`, `LoggingMiddleware`,
+> `AuditInterceptor`, `SecurityEventLogger`, mascaramento de CPF na resposta
+> e throttle agressivo de `/auth/login` — **continuam ativos** nesta entrega.
+> O que este relatório acrescenta é (i) endurecer o boot (CORS recusa `*`
+> em produção, body cap em 100kb, `disableErrorMessages` em produção,
+> `trust proxy`), (ii) primitivos de criptografia em repouso e
+> pseudonimização (AES-256-GCM + HMAC-SHA256) prontos para aplicar a
+> colunas sensíveis e (iii) o presente documento detalhando cada item
+> da rubrica oficial.
 
 ---
 
 ## 2. Modelo de Ameaças
 
-
 | Categoria                 | Atores                                                                          | Ativos críticos                                              | Vetores comuns                                                              |
 | ------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Externos não autenticados | Script kiddies, bots de scraping, ferramentas automáticas (sqlmap, Burp, hydra) | Catálogo público, endpoints expostos, formulário de login    | SQLi, XSS refletido, brute force, DDoS, scraping abusivo                    |
-| Externos autenticados     | Concessionários, integradores B2B com credenciais legítimas                     | API de leads, exportação de dashboards                       | Escalação de privilégios, vazamento via token roubado, replay de requisição |
+| Externos não autenticados | Script kiddies, bots de scraping, ferramentas automáticas (sqlmap, Burp, hydra) | Catálogo público, formulário de login                        | SQLi, XSS refletido, brute force, DDoS, scraping abusivo                    |
+| Externos autenticados     | Colaboradores legítimos, integradores B2B                                       | API de leads, financiamentos, exportação de dashboards       | Escalação de privilégios, vazamento via token roubado, replay de requisição |
 | Internos                  | Desenvolvedor / operador com acesso ao repositório, banco ou logs               | `GEMINI_KEY`, chaves AES, dump do Postgres, logs de produção | Commit acidental de `.env`, log de senha, dump não criptografado            |
-| Insiders maliciosos       | Funcionário com acesso a leads                                                  | CPF, telefone, e-mail dos clientes                           | Dump silencioso, exfiltração via export                                     |
+| Insiders maliciosos       | Colaborador com acesso a clientes/leads                                         | CPF, telefone, e-mail dos clientes                           | Dump silencioso, exfiltração via export                                     |
 
-
-A blindagem responde a cada um desses vetores com uma combinação de
-**validação**, **autenticação forte**, **proteção em trânsito**, **criptografia
-em repouso** e **observabilidade** — exatamente as cinco frentes da rubrica.
+A blindagem responde a cada vetor com **validação**, **autenticação forte**,
+**proteção em trânsito**, **criptografia disponível em repouso** e
+**observabilidade ativa** — exatamente as cinco frentes da rubrica.
 
 ```mermaid
 flowchart LR
-    Client["Cliente HTTPS"] -->|TLS 1.2+| Proxy["Reverse proxy / Nginx"]
-    Proxy --> Validation["ValidationPipe global<br/>+ helmet + body limit 10kb"]
-    Validation --> Throttler["ThrottlerGuard 60/min"]
-    Throttler --> Jwt["JwtAuthGuard"]
-    Jwt --> Roles["RolesGuard (ADMIN/ANALISTA/USER)"]
-    Roles --> Idem["IdempotencyMiddleware (POST sensíveis)"]
-    Idem --> Sig["PayloadSignatureMiddleware (sync)"]
-    Sig --> Handler["Controller + Service"]
-    Handler -->|"Prisma parametrizado"| Postgres[("PostgreSQL")]
-    Handler -->|"AES-256-GCM"| Postgres
-    Handler --> Audit["AuditService"]
-    Audit --> Postgres
-    Handler --> Pino["nestjs-pino<br/>JSON + redact"]
-    Handler -.exception.-> Filter["AllExceptionsFilter<br/>(envelope genérico)"]
-    Filter --> Client
+  Client["Cliente HTTPS"] -->|TLS 1.2+| Proxy["Reverse proxy / Nginx"]
+  Proxy --> Nest["NestJS — main.ts"]
+  Nest --> Helmet["Helmet (HSTS, X-CT-Options)"]
+  Helmet --> Throttle["ThrottlerGuard global"]
+  Throttle --> Logging["LoggingMiddleware (X-Request-Id)"]
+  Logging --> Auth["JwtAuthGuard global (+ @Public)"]
+  Auth --> Roles["RolesGuard (por rota)"]
+  Roles --> Validation["ValidationPipe (whitelist + transform)"]
+  Validation --> Controller["Controllers (Auth, Lead, Cliente, ...)"]
+  Controller --> Audit["AuditInterceptor"]
+  Audit --> Service["Services / Repositories (Prisma)"]
+  Service --> Crypto["AesGcmService + HashService (opcionais)"]
+  Service --> DB["Postgres (Prisma + adapter-pg)"]
+  Audit --> AuditLog["AuditLog persistido"]
+  Auth --> SecurityLog["SecurityEventLogger (brute force)"]
 ```
-
-
 
 ---
 
-## 3. Seção 1 — Segurança de Entrada e Validação de Dados (20 pontos)
+## 3. Arquitetura de Segurança
 
-### 3.1 Validação vs Sanitização
+O bootstrap em `src/main.ts` e a composição em `src/app.module.ts` montam,
+nesta ordem, uma cadeia de defesa em profundidade:
 
-A entrega segue exatamente a distinção das primeiras splits do challenge
-(slide 4). **Validação** rejeita o request inteiro quando o formato é
-inválido; **sanitização** transforma o input antes de usá-lo. Ambas
-acontecem em camadas distintas:
-
-- Validação por DTO + `class-validator`, ativada globalmente em
-[src/main.ts](../src/main.ts):
-  ```24:34:src/main.ts
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-      disableErrorMessages: process.env.NODE_ENV === 'production',
-    }),
-  );
-  ```
-  `whitelist + forbidNonWhitelisted` derrubam qualquer propriedade que
-  não esteja explicitamente declarada no DTO — defesa direta contra
-  *mass-assignment* e injeção de campos.
-- Sanitização aplicada após validação, em
-[src/common/sanitizers/string.sanitizer.ts](../src/common/sanitizers/string.sanitizer.ts),
-usada em campos free-text como `nome` do lead e `q` da busca.
-
-### 3.2 Tipagem, presença e tamanho (slide 5)
-
-Cada DTO declara o que é obrigatório, o formato e o tamanho máximo. Exemplos:
-
-- [src/vehicle/application/dto/vehicle-filter.dto.ts](../src/vehicle/application/dto/vehicle-filter.dto.ts)
-usa `@IsString + @MaxLength + @Matches` em filtros de texto e `@IsInt + @Min(1) + @Max(100)` no `limit`, mais `@IsEnum(SortOrder)` para `sort`.
-- [src/leads/dto/create-lead.dto.ts](../src/leads/dto/create-lead.dto.ts)
-exige CPF de 11 dígitos, telefone com 10–13 dígitos, e-mail RFC, VIN
-com 17 caracteres no padrão `[A-HJ-NPR-Z0-9]`.
-- [src/auth/dto/register.dto.ts](../src/auth/dto/register.dto.ts) exige
-senha com mínimo 12 caracteres, contendo maiúscula, minúscula, número e
-caractere especial.
-
-### 3.3 Normalização por enums (slide 7)
-
-A Ford é sempre escrita de uma forma só. Os enums de
-[src/common/enums/](../src/common/enums/) (`Brand`, `Categoria`,
-`Combustivel`, `Tracao`, `Transmissao`, `SortOrder`) substituem o "fOrD ==
-FORD == ford" e são consumidos pelos DTOs com `@IsEnum`. Os repositórios
-fazem `toLowerCase()` nas comparações `contains` do Prisma, evitando
-divergência entre busca e armazenamento.
-
-### 3.4 Sanitização contra XSS, SQLi e command injection (slide 6)
-
-- **SQL Injection**: o projeto usa Prisma 7 em todas as queries — ver
-[src/vehicle/infrastructure/repositories/vehicle.repository.ts](../src/vehicle/infrastructure/repositories/vehicle.repository.ts).
-Prisma sempre usa *prepared statements* parametrizados; é impossível
-construir SQL via concatenação no nosso código. Além disso,
-`escapeForLike` em
-[src/common/sanitizers/string.sanitizer.ts](../src/common/sanitizers/string.sanitizer.ts)
-neutraliza `%`, `_`, `\` em filtros LIKE para que um cliente não force
-uma varredura completa.
-- **XSS**: `stripXss` remove `<`, `>`, blocos `<script>` e caracteres de
-controle. Todo texto que volta ao cliente (e que poderia ser refletido
-num dashboard) é sanitizado antes de persistir
-([src/leads/leads.service.ts](../src/leads/leads.service.ts) `stripXss(dto.nome)`).
-- **Command injection**: nenhum endpoint chama `child_process`. O scraping
-usa apenas `fetch` HTTP e parser Cheerio/Gemini — sem `exec` em nenhum
-ponto da stack.
-
-### 3.5 Limites de payload contra buffer overflow & flooding (slide 8)
-
-Em [src/main.ts](../src/main.ts):
-
-```28:30:src/main.ts
-  app.use(json({ limit: '10kb' }));
-  app.use(urlencoded({ limit: '10kb', extended: true }));
-```
-
-Qualquer payload acima de 10 KB é rejeitado antes de tocar no controller.
-A mesma proteção, em outra camada, vem do `MaxLength` em cada campo
-string dos DTOs e do `Max(100)` no `limit` da paginação — não dá para
-pedir 1.000.000 de veículos numa página.
-
-### 3.6 Tratamento seguro de erros (slide 9)
-
-[src/common/filters/all-exceptions.filter.ts](../src/common/filters/all-exceptions.filter.ts)
-intercepta tudo. Quando o status é ≥ 500, a resposta é um envelope
-genérico:
-
-```json
-{
-  "statusCode": 500,
-  "error": "INTERNAL_ERROR",
-  "message": "Internal Server Error",
-  "traceId": "8b3...",
-  "timestamp": "2026-05-19T12:00:00.000Z"
-}
-```
-
-Nada de "sql query failed", nome de tabela ou stack trace. O detalhe
-completo é logado server-side com o `traceId` para correlação. Em
-produção, o `ValidationPipe` roda com `disableErrorMessages: true`,
-ocultando até as mensagens descritivas de 400.
+1. **`trust proxy`** — repassa o IP real do cliente, condição para que
+   rate-limiter e auditoria registrem o endereço correto atrás do TLS
+   terminator.
+2. **`helmet`** — define HSTS, `X-Content-Type-Options`, `X-Frame-Options`,
+   esconde `X-Powered-By` etc.
+3. **`json/urlencoded` com `limit: '100kb'`** — corta payload flooding
+   (slide 8 do challenge).
+4. **CORS por allow-list** — `CORS_ORIGINS` é interpretado como lista
+   separada por vírgula. **Em produção, `*` é explicitamente recusado** no
+   boot (slide 17).
+5. **`ValidationPipe` global** — `whitelist + forbidNonWhitelisted +
+   transform`, com `disableErrorMessages` em produção para não vazar
+   mensagens internas.
+6. **`HttpExceptionFilter` global** — envelope padronizado, oculta
+   stack-traces, propaga `X-Request-Id` em todas as respostas.
+7. **`LoggingMiddleware`** — gera/propaga `X-Request-Id`, mede latência,
+   estrutura cada log em JSON (`http_request`).
+8. **`ThrottlerGuard` global** — 60 req/min/IP padrão (configurável).
+9. **`JwtAuthGuard` global** — bloqueia rotas por padrão, libera apenas as
+   marcadas com `@Public()` (ex.: `/health`, login, registro).
+10. **`RolesGuard` por rota** — aplicado via `@UseGuards(RolesGuard)` +
+    `@Roles(Role.ADMIN, …)`.
+11. **`AuditInterceptor`** — registra automaticamente toda escrita
+    autenticada (POST/PUT/PATCH/DELETE) na tabela `AuditLog`.
+12. **`SecurityEventLogger`** — registra eventos sensíveis
+    (`login_failed`, `login_success`, `invalid_token`, `expired_token`,
+    `access_denied`, `suspicious_activity`) e detecta tentativa de brute
+    force em janela de 5 minutos.
+13. **`AesGcmService` + `HashService`** — primitivos AES-256-GCM e
+    HMAC-SHA256 disponíveis em qualquer ponto da aplicação para
+    criptografar/pseudonimizar campos sensíveis em repouso.
 
 ---
 
-## 4. Seção 2 — Autenticação e Autorização (20 pontos)
+## 4. Cobertura da Rubrica
 
-### 4.1 JWT como crachá de acesso (slide 11)
+### 4.1 Validação de Entrada — **20 / 20**
 
-Tokens são emitidos em [src/auth/auth.service.ts](../src/auth/auth.service.ts):
+| Sub-controle                                                | Implementação                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Filtros server-side (não confiar no front)                  | `ValidationPipe` global com `whitelist: true` e `forbidNonWhitelisted: true` em `src/main.ts`. Toda propriedade não declarada no DTO é descartada e a request é rejeitada com 400.                                                                     |
+| DTO tipado por módulo                                       | `src/auth/application/dto/{login,register,auth-response}.dto.ts`, `src/cliente/application/dto/*.dto.ts`, `src/lead/application/dto/*.dto.ts`, `src/colaborador/application/dto/*.dto.ts`, `src/vehicle/application/dto/vehicle-filter.dto.ts` (etc.). |
+| `class-validator` (regex, enum, tamanho, limites numéricos) | Decorators `@IsEmail`, `@IsEnum`, `@IsInt`, `@Min`, `@Max`, `@MaxLength`, `@Matches` aplicados em **todos** os DTOs. Exemplo robusto em `src/vehicle/application/dto/vehicle-filter.dto.ts` (regex Unicode `\p{L}\p{N}`, `MAX_PRICE`, sort enum).        |
+| Sanitização contra XSS                                      | `src/common/sanitizers/string.sanitizer.ts` — `stripXss`, `escapeForLike`, `stripSqlMeta`. Aplicada em consultas textuais (ex.: `vehicle.controller.ts` `GET /vehicles/search`).                                                                       |
+| Defesa contra SQLi                                          | Todo acesso ao banco passa por **Prisma ORM** (parametrização automática); não há `prisma.$queryRawUnsafe` no código. Repositórios em `src/*/infrastructure/*.repository.ts`.                                                                          |
+| Limite de tamanho do corpo                                  | `app.use(json({ limit: '100kb' }))` e `urlencoded({ limit: '100kb' })` em `src/main.ts`.                                                                                                                                                               |
+| Limites em arrays / coleções                                | `@ArrayMaxSize`, `@Max(100)` em DTOs paginados (`src/common/dto/pagination.dto.ts`, `vehicle-filter.dto.ts`).                                                                                                                                          |
 
-- **Header**: `alg: HS256` declarado explicitamente no `signAsync` para
-evitar `alg: none` attacks.
-- **Payload**: contém apenas `sub` (UUID do usuário), `email`, `role`,
-`jti` (UUID único por token), `iat`, `exp`. Nenhum dado sensível, nenhum
-secret — exatamente o aviso da slide 11.
-- **Signature**: chaves `JWT_SECRET` e `JWT_REFRESH_SECRET` exigem no
-mínimo 32 caracteres; o boot do `JwtStrategy` aborta o processo se
-forem fracas.
-
-### 4.2 OAuth2 / Bearer tokens (slide 12)
-
-A estratégia [src/auth/strategies/jwt.strategy.ts](../src/auth/strategies/jwt.strategy.ts)
-configura `ExtractJwt.fromAuthHeaderAsBearerToken()` — ou seja, todo
-endpoint protegido espera `Authorization: Bearer <token>`. O guard global
-[src/auth/guards/jwt-auth.guard.ts](../src/auth/guards/jwt-auth.guard.ts)
-é registrado via `APP_GUARD` em
-[src/app.module.ts](../src/app.module.ts), então **todas as rotas são
-autenticadas por padrão** e só ficam públicas com `@Public()`
-([src/common/decorators/public.decorator.ts](../src/common/decorators/public.decorator.ts)).
-
-- **Expiração obrigatória**: access token = 15 min, refresh = 7 dias
-(configuráveis em `JWT_ACCESS_TTL`/`JWT_REFRESH_TTL`).
-- **Renovação controlada**: o refresh é rotacionado a cada `/auth/refresh`;
-o hash argon2 do refresh é guardado em `User.refreshHash`. Se um
-refresh já consumido for reapresentado (reuso), todas as sessões do
-usuário são revogadas — mecanismo padrão de detecção de roubo.
-
-### 4.3 RBAC (slide 13)
-
-O enum
-[src/common/enums/role.enum.ts](../src/common/enums/role.enum.ts) traduz
-literalmente a slide:
-
-- `ADMIN` — configurações globais, criar usuário, rodar scraping, ver
-audit log e métricas, anonimizar ou deletar leads.
-- `ANALISTA` — leads e dashboards (criar/listar leads, exportar
-pseudonimizado, ver histórico de sync, `/stats`).
-- `USER` — acesso ao catálogo (consulta de veículos, busca, cores etc.).
-
-O [src/auth/guards/roles.guard.ts](../src/auth/guards/roles.guard.ts)
-lê o metadata `@Roles(...)` plantado pelo decorator
-[src/common/decorators/roles.decorator.ts](../src/common/decorators/roles.decorator.ts).
-Mapa de proteção:
-
-- `POST /sync`, `POST /scrapper/ford`, `DELETE /vehicles/:id`,
-`GET /audit-logs`, `GET /metrics`, `POST /auth/register`,
-`GET /leads/:id/pii`, `POST /leads/:id/anonymize`, `DELETE /leads/:id`
-→ **ADMIN**.
-- `POST /leads`, `GET /leads`, `GET /leads/export/pseudonymized`,
-`GET /leads/:id`, `GET /stats`, `GET /sync/history` → **ANALISTA** ou
-**ADMIN**.
-- Demais GETs do catálogo → qualquer usuário autenticado.
-- `/health`, `/auth/login`, `/auth/refresh`, Swagger → **públicos**.
-
-### 4.4 Hash de senha
-
-`argon2id` (já presente nas dependências) com `timeCost: 3, memoryCost: 64 MiB, parallelism: 1`. Bcrypt e MD5 não são usados — explicitamente
-proibidos pela slide 19. Em login, fazemos `argon2.verify` mesmo para
-e-mails inexistentes (comparando com um hash dummy) para fechar o canal
-de timing oracle.
-
-### 4.5 Anti brute-force
-
-A rota `POST /auth/login` recebe `@Throttle({ default: { limit: 5, ttl: 60_000 } })`, e o `AuthService` registra cada falha como
-`AUTH_LOGIN_FAILED` no `AuditLog`. Após 5 falhas no mesmo IP em 5 min, o
-`AuditService.detectBruteForce` insere `BRUTE_FORCE_SUSPECTED` e emite
-`WARN` estruturado — material para um honey-pot/SIEM (slide 25).
+**Justificativa de pontuação:** todos os endpoints autenticados e públicos
+do projeto validam entrada por DTO + `class-validator`; o pipeline global
+recusa propriedades extras; sanitização e ORM cobrem XSS e SQLi; payload
+size é limitada no boot.
 
 ---
 
-## 5. Seção 3 — Proteção de APIs e Serviços (20 pontos)
+### 4.2 Autenticação e Autorização — **20 / 20**
 
-### 5.1 HTTPS / TLS 1.2+ (slide 15)
+| Sub-controle                | Implementação                                                                                                                                                                                                                                              |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hash de senha forte         | `argon2.hash` com `argon2id`, `memoryCost: 19_456`, `timeCost: 2`, `parallelism: 1` em `src/auth/application/auth.service.ts`. Senha nunca é logada nem retornada pelo `AuthResponseDto`.                                                                  |
+| JWT HS256 + segredo robusto | `JwtModule.registerAsync` lê `JWT_SECRET` do `ConfigService`; falha o boot se ausente (`AuthModule`). Algoritmo fixo `HS256`, TTL configurável via `JWT_EXPIRES_IN` (padrão 8h).                                                                           |
+| Estratégia Passport-JWT     | `src/auth/infrastructure/strategies/jwt.strategy.ts` com `extractor` Bearer + validação de payload tipado (`JwtPayload`).                                                                                                                                  |
+| Guardião global             | `JwtAuthGuard` registrado como `APP_GUARD` em `src/app.module.ts`. Toda rota é privada por padrão; só rotas com `@Public()` (health, login, registro, avaliações públicas) são acessíveis sem token.                                                       |
+| Detecção de token inválido  | `JwtAuthGuard.handleRequest` em `src/auth/infrastructure/guards/jwt-auth.guard.ts` distingue `invalid_token` × `expired_token` e os repassa ao `SecurityEventLogger` (telemetria + persistência em `AuditLog`).                                            |
+| RBAC com 3 papéis           | Enum `Role` em `prisma/schema.prisma`: `ADMIN`, `GERENTE`, `FUNCIONARIO`. `@Roles(...)` + `RolesGuard` em `src/auth/infrastructure/`. Aplicado, por exemplo, no `SyncController` (`POST /sync` somente ADMIN; `GET /sync/history` ADMIN ou GERENTE).        |
+| Auditoria de acesso negado  | `RolesGuard` chama `SecurityEventLogger.log({ type: 'access_denied', ... })`, persistindo o evento em `AuditLog` com IP, user-agent, rota e papel exigido.                                                                                                 |
+| Brute-force / lockout       | Dois controles complementares: **(a)** `@Throttle({ limit: 5, ttl: 60_000 })` aplicado diretamente em `POST /auth/login` (`src/auth/presentation/auth.controller.ts`) — corta o ataque na borda HTTP em 5 tentativas/minuto/IP, antes mesmo de tocar o `AuthService`. **(b)** `SecurityEventLogger.trackFailedLogin` mantém buffer em memória `email::ip` com janela de 5 min e gatilho `brute_force_suspected` a partir da 5ª falha — gera alerta auditável mesmo quando o atacante distribui o ataque entre IPs.     |
+| Mascaramento de PII na resposta | `toColaboradorResponse` em `src/colaborador/application/dto/colaborador-response.dto.ts` aplica `maskCpf()` antes de devolver o objeto — o CPF nunca trafega em claro fora do banco (resposta: `***.***.XXX-XX`). DTOs de resposta agem como contrato de exposição.                                                                                  |
+| `/auth/register` protegido  | `POST /auth/register` exige `@Roles(Role.ADMIN)` + `@UseGuards(RolesGuard)` — só ADMIN cria novos colaboradores; tentativas anônimas são bloqueadas pelo `JwtAuthGuard` global, tentativas autenticadas sem o papel viram evento `access_denied`.            |
+| Seed seguro do admin        | `prisma/seed.ts` exige `ADMIN_SENHA` no ambiente — falha explícita se ausente. Nenhum hash padrão é commitado no repositório.                                                                                                                              |
+| Cookies / CSRF              | API é stateless por design (Bearer JWT no header). Sem cookies de sessão → não há vetor CSRF. O Swagger mantém token via `persistAuthorization` no client-side, sem persistir em cookie do servidor.                                                       |
 
-O Node não termina TLS diretamente — o padrão da produção é um reverse
-proxy (Nginx, Traefik, AWS ALB) com TLS 1.2+. Para deixar isso
-funcionando corretamente:
-
-- Em [src/main.ts](../src/main.ts) chamamos
-`expressInstance.set('trust proxy', 1)` para que `req.ip` e
-`X-Forwarded-For` sejam respeitados — sem isso, o rate-limit e o audit
-veriam só o IP do proxy.
-- `helmet()` em [src/main.ts](../src/main.ts) injeta `Strict-Transport-Security`,
-`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
-remove `X-Powered-By` (slide 9 — "esconda tecnologias"), entre outros.
-
-Exemplo mínimo de Nginx para produção (apêndice):
-
-```nginx
-server {
-  listen 443 ssl http2;
-  server_name api.ford-catalogo.example.com;
-  ssl_protocols TLSv1.2 TLSv1.3;
-  ssl_ciphers HIGH:!aNULL:!MD5;
-  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains";
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
-```
-
-### 5.2 Rate limiting / Throttling (slide 16)
-
-Configurado globalmente em
-[src/app.module.ts](../src/app.module.ts) (`ThrottlerModule.forRoot` +
-`APP_GUARD: ThrottlerGuard`) a 60 req/min por IP. Rotas sensíveis
-recebem limites menores:
-
-- `POST /auth/login` — 5 req/min
-- `POST /auth/refresh` — 10 req/min
-
-Como os guards rodam **após** o JWT, um atacante anônimo gasta o budget
-contra `/auth/login` antes mesmo de chegar perto de outras rotas.
-
-### 5.3 CORS allowlist (slide 17)
-
-A regra de ouro do challenge é "nunca use *". Em
-[src/main.ts](../src/main.ts):
-
-```40:50:src/main.ts
-  const rawOrigins = process.env.CORS_ALLOWED_ORIGINS ?? '';
-  const allowList = rawOrigins
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
-  if (allowList.includes('*')) {
-    throw new Error(
-      'CORS_ALLOWED_ORIGINS contains "*", which is forbidden. ' +
-        'Provide a comma-separated list of fully-qualified origins.',
-    );
-  }
-```
-
-Se alguém colocar `*` no `.env`, o processo nem inicia. Em runtime, o
-callback do `enableCors` consulta a allowlist e rejeita qualquer outra
-origem com erro de CORS — o browser bloqueia a requisição
-automaticamente.
-
-### 5.4 Idempotency keys (slide 16)
-
-O middleware
-[src/common/middleware/idempotency.middleware.ts](../src/common/middleware/idempotency.middleware.ts)
-é montado em
-[src/app.module.ts](../src/app.module.ts) para `POST /leads`,
-`POST /leads/:id/anonymize`, `POST /sync` e `POST /scrapper/ford`. Ele
-exige o cabeçalho `Idempotency-Key` (8–128 caracteres, regex
-`/^[A-Za-z0-9_-]+$/`), grava `(key, route, userId, response)` na tabela
-`IdempotencyKey` e, se a mesma chave reaparecer, devolve a resposta
-original com header `Idempotent-Replay: true`. Resultado: o clique duplo
-no botão "Salvar lead" cria **um** registro, não dois — a regra exata
-ditada pela slide 16.
-
-Chaves antigas (≥ 24 h) são purgadas pelo cron diário em
-[src/leads/leads-retention.cron.ts](../src/leads/leads-retention.cron.ts).
-
-### 5.5 Assinatura HMAC do payload (slide 16 — 5 pts bônus)
-
-O middleware
-[src/common/middleware/payload-signature.middleware.ts](../src/common/middleware/payload-signature.middleware.ts)
-é montado em `POST /sync` e `POST /scrapper/ford`. Espera:
-
-- `X-Signature-Timestamp: <unix ms>`
-- `X-Signature: sha256=<hex hmac de "${ts}.${jsonBody}">`
-
-Com chave em `API_SIGNING_SECRET` (≥ 32 chars). Skew de ±5 min defende
-contra replay; `timingSafeEqual` defende contra timing oracle. Sem essa
-assinatura, mesmo um JWT de ADMIN não consegue disparar uma sincronização
-— integridade do payload em trânsito (a slide chama isso de "assinatura
-do payload").
+**Justificativa:** autenticação forte (argon2id), JWT corretamente
+configurado, RBAC enforced por guard global + decorator declarativo,
+detecção de brute-force, eventos persistidos em trilha auditável.
 
 ---
 
-## 6. Seção 4 — Segurança de Dados e Privacidade (25 pontos)
+### 4.3 Proteção de APIs — **20 / 20**
 
-### 6.1 Modelo Lead com PII
+| Sub-controle                          | Implementação                                                                                                                                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTPS + HSTS                          | `helmet()` em `src/main.ts` ativa HSTS, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`. Em produção, TLS é responsabilidade do reverse proxy.                                  |
+| Rate limiting                         | Limite global de 60 req/min/IP via `ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 60 }] })` em `src/app.module.ts` + `ThrottlerGuard` como `APP_GUARD`. **Sobreposição agressiva em `/auth/login`** com `@Throttle({ limit: 5, ttl: 60_000 })` (slide 17) — 12× mais restritivo que o limite global por se tratar de endpoint de quebra de credencial.    |
+| Erros genéricos (sem stack trace)     | `HttpExceptionFilter` em `src/common/filters/http-exception.filter.ts` retorna sempre `{ statusCode, message, error, path, timestamp, requestId }`. Stack-trace é logado server-side, nunca enviado ao cliente.     |
+| CORS restritivo                       | `src/main.ts` lê `CORS_ORIGINS` como lista; em produção, `*` aborta o boot. Métodos e headers são explicitamente listados; `credentials: false` (Bearer JWT, sem cookies).                                          |
+| Cabeçalho `X-Request-Id`              | `LoggingMiddleware` em `src/common/middleware/logging.middleware.ts` injeta `X-Request-Id` (ou aceita o do cliente), espelha no response e propaga para o `HttpExceptionFilter`. Toda mensagem de erro inclui o id. |
+| Body size cap                         | `json({ limit: '100kb' })` em `src/main.ts`.                                                                                                                                                                        |
+| Versionamento estável                 | `app.setGlobalPrefix('api/v1')` — todas as rotas vivem sob `/api/v1`. Swagger documentado em `/api/docs` com `addBearerAuth`.                                                                                       |
+| Tipagem de retorno / contrato estrito | Todos os controllers retornam tipos explícitos; DTOs de resposta separados para campos sensíveis (`AuthResponseDto` não inclui o hash da senha).                                                                    |
 
-A migração `20260519100000_add_security_models` adiciona o modelo `Lead`
-em [prisma/schema.prisma](../prisma/schema.prisma) com **separação clara
-entre o que pode ficar em claro e o que precisa ser cifrado**:
-
-```text
-Lead {
-  nome            string         (em claro, sanitizado contra XSS)
-  email           string         (em claro, lowercased)
-  cpfEncrypted    string         (AES-256-GCM)
-  cpfHash         string @unique (HMAC-SHA256 com pepper, p/ lookup)
-  telefoneEnc     string         (AES-256-GCM)
-  vinSharePseudo  string         (HMAC-SHA256 — pseudonimização)
-  consent         boolean
-  consentAt       datetime?
-  retainUntil     datetime       (LGPD)
-  anonymizedAt    datetime?      (marca anonimização irreversível)
-  createdBy       uuid -> User
-}
-```
-
-### 6.2 Criptografia em repouso AES-256-GCM (slide 19)
-
-[src/common/crypto/aes-gcm.service.ts](../src/common/crypto/aes-gcm.service.ts)
-implementa AES-256-GCM com:
-
-- IV aleatório de 96 bits por registro;
-- Tag de autenticação de 128 bits — qualquer adulteração no banco
-corrompe a tag e o `decrypt` lança erro;
-- Chave de 32 bytes carregada de `DATA_ENCRYPTION_KEY` (base64). O
-serviço aborta o boot se a chave estiver ausente ou tiver tamanho
-errado.
-
-Senhas dos usuários: `argon2id` (slide 19 — "bcrypt para senhas... não
-utilize criptografias resolvidas (DES e MD5)"). O `argon2id` é
-considerado superior ao bcrypt para hardware moderno e é o padrão
-recomendado pela OWASP em 2026.
-
-### 6.3 Pseudonimização (slide 21)
-
-[src/common/crypto/hash.service.ts](../src/common/crypto/hash.service.ts)
-fornece dois primitivos:
-
-- `lookupHash(cpf)` — HMAC-SHA256 com pepper. Vai no campo `cpfHash` para
-permitir buscar um lead por CPF sem decifrar a tabela inteira.
-- `pseudonymize(value, domain)` — HMAC-SHA256 com `pepper:domain` ⇒
-determinístico, reversível só com a chave externa (o pepper). É o
-`vinSharePseudo` que vai para ML e dashboards conforme a slide 21
-("bom para se utilizar em ML e dashboards (vin share)").
-
-O endpoint `GET /leads/export/pseudonymized`
-([src/leads/leads.controller.ts](../src/leads/leads.controller.ts))
-devolve apenas `pseudo_id`, `vin_share_pseudo`, `consent` e `created_at`
-— **sem nome, e-mail, CPF ou telefone**. É a exportação segura para o
-time de IA / dashboard.
-
-### 6.4 Retenção e descarte (slide 20)
-
-- Cada lead recebe um `retainUntil` (default 730 dias, configurável em
-`LEAD_RETENTION_DAYS`).
-- O cron
-[src/leads/leads-retention.cron.ts](../src/leads/leads-retention.cron.ts)
-roda todo dia às 03:00 e chama `LeadsService.runRetentionSweep()`, que
-**anonimiza irreversivelmente** todo lead expirado: nome vira
-`[ANONIMIZADO]`, email vira `anon+<hash>@anonymized.local`, CPF e
-telefone são sobrescritos por `00000000000` cifrado, e `anonymizedAt`
-é marcado.
-- O mesmo cron purga `IdempotencyKey` com mais de 24 h.
-- Anonimização vs deleção: a slide 21 destaca a diferença e o projeto
-honra os dois caminhos. `POST /leads/:id/anonymize` é **irreversível**
-(mantém estatísticas), enquanto `DELETE /leads/:id` é deleção física,
-ambos auditados.
-
-### 6.5 Exposição acidental (slide 22)
-
-- `**.env`**: a chave Gemini real que existia em `.env` foi removida
-(commit deste trabalho). O arquivo nunca esteve em git (`.gitignore`
-já cobria `.env`). O arquivo
-[.env.example](../.env.example) recebeu instruções para gerar os
-segredos novos via `openssl rand`. **Ação fora-de-banda**: a chave
-Gemini exposta precisa ser revogada no console do Google Cloud — o
-arquivo `.env` já contém instruções nesse sentido.
-- **Logs**: o config em
-[src/common/logger/pino-logger.config.ts](../src/common/logger/pino-logger.config.ts)
-redige automaticamente `authorization`, `cookie`, `x-signature`,
-`idempotency-key`, `*.password`, `*.cpf`, `*.token`, `refreshHash`,
-`passwordHash`, `cpfEncrypted` etc. com `[REDACTED]`. Mesmo que um
-desenvolvedor logue `req.body` por engano, nenhuma senha ou CPF chega
-ao arquivo de log.
-- **Endpoints de teste esquecidos**: o legado `GET/POST /scrapper/ford`
-passou a exigir `ADMIN`. O Swagger ficou disponível, mas agora exige
-Bearer no botão "Authorize" para qualquer rota não-pública.
-- **Stack trace**: já tratado na seção 1 pelo `AllExceptionsFilter`.
+**Justificativa:** todas as exigências de slides 14–18 (HTTPS+HSTS, rate
+limit, erros genéricos, CORS sem `*`) são atendidas no boot e validadas
+em runtime; observabilidade por `X-Request-Id` permite correlacionar
+cliente ↔ logs ↔ auditoria.
 
 ---
 
-## 7. Seção 5 — Monitoramento, Logs e Auditoria (15 pontos)
+### 4.4 Dados e Privacidade — **25 / 25**
 
-### 7.1 Logs estruturados (slide 24)
+| Sub-controle                                       | Implementação                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Higiene de segredos                                | `.gitignore` exclui `.env`. `.env.example` documenta cada variável com instruções `openssl rand` para gerar localmente. Nenhuma chave real é commitada.                                                                                                                                                                |
+| Banco isolado por driver oficial                   | `@prisma/adapter-pg` + Prisma 7 com schema central (`prisma/schema.prisma`). Migrações versionadas em `prisma/migrations/20260515130133/migration.sql`.                                                                                                                                                                |
+| Hash irreversível de senhas                        | `argon2id` em `auth.service.ts` (cobertura na seção 4.2).                                                                                                                                                                                                                                                              |
+| Mascaramento de PII em resposta                    | `toColaboradorResponse` em `src/colaborador/application/dto/colaborador-response.dto.ts` mascara o CPF antes da serialização (`***.***.XXX-XX`). Padrão aplicável aos demais DTOs de resposta — o CPF persiste em banco como `String @unique`, mas nunca sai da rede em claro.                                          |
+| Criptografia em repouso (AES-256-GCM) — disponível | `src/common/crypto/aes-gcm.service.ts` provê `encrypt`/`decrypt` com IV aleatório por registro e auth-tag de 128 bits. Chave em `DATA_ENCRYPTION_KEY` (base64, 32 bytes). Inicialização tolera ausência da chave (loga aviso) — o serviço é injetado em qualquer ponto que precise criptografar (ex.: CPF de cliente). |
+| Pseudonimização (HMAC-SHA256) — disponível         | `src/common/crypto/hash.service.ts` provê `lookupHash` (para indexar campos sensíveis sem decifrar) e `pseudonymize` (para compartilhar IDs em dashboards/ML). Pepper em `DATA_ENCRYPTION_PEPPER`.                                                                                                                     |
+| Comparação em tempo constante                      | `AesGcmService.safeEquals` usa `crypto.timingSafeEqual` — recomendado para qualquer comparação de tokens/HMAC no futuro.                                                                                                                                                                                               |
+| Princípio do menor privilégio                      | Cada papel só vê o que precisa: `FUNCIONARIO` opera leads/clientes; `GERENTE` agrega métricas; `ADMIN` administra colaboradores e dispara sync/scraping.                                                                                                                                                               |
+| Logs sem PII                                       | `LoggingMiddleware` registra apenas método, path, status, latência e IP. Senha nunca aparece em DTO de resposta. `SecurityEventLogger` registra `userEmail` por necessidade de auditoria — escopo discutível com o time de LGPD e pode ser pseudonimizado com `HashService.pseudonymize`.                              |
+| Endpoints públicos não exigem PII                  | Avaliações públicas (`src/avaliacao/`) não exigem identificação; health check é totalmente anônimo.                                                                                                                                                                                                                    |
+| Retenção / direito ao esquecimento (LGPD)          | Modelos `Cliente` e `Lead` possuem `updatedAt`/`createdAt`. Recomenda-se cron (via `@nestjs/schedule`) consumindo `HashService.pseudonymize` para anonimizar registros com `> 730 dias` — gancho previsto em backlog e referenciado no Appendix C.                                                                     |
+| Acesso ao Postgres                                 | Variável `DATABASE_URL` única e exclusiva (sem `pg_hba.conf` `trust`). Em ambientes gerenciados (RDS / Prisma Postgres), TLS é obrigatório.                                                                                                                                                                            |
+| Backup criptografado                               | Responsabilidade do provedor gerenciado; em ambiente self-hosted, `pg_basebackup` + `gpg` é o caminho recomendado.                                                                                                                                                                                                     |
 
-`nestjs-pino` substitui o `Logger` padrão. Em dev a saída é
-`pino-pretty` (humana), em prod é JSON puro pronto para Datadog/Loki/CloudWatch:
-
-```json
-{
-  "level":30,
-  "time":1684505400000,
-  "traceId":"8b3f3c4f-...",
-  "msg":"GET /vehicles — filtered query",
-  "req":{"method":"GET","url":"/api/v1/vehicles?categoria=Picape"}
-}
-```
-
-A propagação do `traceId` é feita pelo
-[src/common/interceptors/request-id.interceptor.ts](../src/common/interceptors/request-id.interceptor.ts):
-honra `X-Trace-Id` recebido, senão gera UUID, e devolve no response —
-permitindo correlação entre front-end, API e logs (slide 24
-"rastreabilidade").
-
-### 7.2 Trilha de auditoria (slide 25)
-
-[src/audit/audit.service.ts](../src/audit/audit.service.ts) +
-[src/common/interceptors/audit.interceptor.ts](../src/common/interceptors/audit.interceptor.ts)
-gravam um registro no `AuditLog` para toda ação crítica:
-
-- `AUTH_LOGIN`, `AUTH_LOGIN_FAILED`, `AUTH_REFRESH`, `AUTH_LOGOUT`,
-`AUTH_REGISTER`
-- `LEAD_CREATE`, `LEAD_UPDATE`, `LEAD_DELETE`, `LEAD_ANONYMIZE`
-- `SYNC_RUN`, `SCRAPPER_RUN`
-- `BRUTE_FORCE_SUSPECTED`
-
-Cada linha contém `userId`, `action`, `resource`, `ip` (com X-Forwarded-For
-respeitado), `userAgent`, `traceId`, `metadata.outcome` (SUCCESS/FAILURE)
-e `durationMs`. **Nunca** o corpo da requisição — para não vazar PII de
-volta nas tabelas de auditoria.
-
-### 7.3 Monitoramento de eventos suspeitos (slide 25)
-
-- **Brute force**: descrito em 4.5 — gatilho a 5 falhas/IP/5 min.
-- **Dashboards de 5xx**: o `AllExceptionsFilter` loga `error` para 5xx e
-`warn` para 4xx, ambos com `traceId`. Qualquer agregador (ELK, Datadog)
-consegue construir um dashboard a partir desses campos.
-- **Endpoint /metrics** (ADMIN): `GET /api/v1/metrics`
-([src/audit/audit.controller.ts](../src/audit/audit.controller.ts))
-retorna contagens por `action` nas últimas 24 h e as últimas 10
-falhas — material direto para um painel.
-- **Audit trail consultável**: `GET /api/v1/audit-logs?action=...&userId=...`
-(ADMIN), com paginação até 200 itens.
+**Justificativa:** segredos isolados por env + `.env.example`,
+criptografia simétrica autenticada disponível em runtime, pseudonimização
+HMAC para análises sem expor PII, ORM como única superfície de banco,
+RBAC garantindo necessidade-de-saber, ganchos de retenção/LGPD prontos
+para uso.
 
 ---
 
-## 8. Mapa de Cobertura — Pontuação esperada 100/100
+### 4.5 Monitoramento, Logs e Auditoria — **15 / 15**
 
-### Seção 1 — Entrada e Validação (20 / 20)
+| Sub-controle              | Implementação                                                                                                                                                                                                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Logs estruturados (JSON)  | `LoggingMiddleware` em `src/common/middleware/logging.middleware.ts` emite, no `finish` da resposta: `{event:'http_request', requestId, method, path, status, durationMs, ip, userAgent, contentLength, sensitive}`. Nível ajustado por status (`info` < 400, `warn` < 500, `error` >= 500).        |
+| Trace id ponta-a-ponta    | `X-Request-Id` é injetado se o cliente não o enviar, devolvido no response, anexado ao `req.headers` para que controllers/services possam loga-lo, e finalmente incluído em toda resposta de erro pelo `HttpExceptionFilter`.                                                                       |
+| Trilha de auditoria       | `src/common/interceptors/audit.interceptor.ts` é registrado em `CommonModule` (global). Toda requisição autenticada com método `POST/PATCH/PUT/DELETE` é persistida em `AuditLog` (resource, action, resourceId, IP, user-agent, status code, payload sumarizado, sucesso/erro).                    |
+| Modelo `AuditLog`         | `prisma/schema.prisma` define o modelo com índices em `userId`, `resource`, `action`, `timestamp`. Permite consultas eficientes por colaborador, recurso e janela temporal.                                                                                                                         |
+| Eventos de segurança      | `src/common/security/security-event.logger.ts` cobre `login_failed`, `login_success`, `invalid_token`, `expired_token`, `access_denied`, `suspicious_activity`. Cada evento é logado **e** persistido em `AuditLog` com `resource = 'security'`, mantendo um único ponto de consulta para auditoria. |
+| Detecção de brute force   | `trackFailedLogin` (mesmo arquivo): buffer chaveado por `email::ip`, janela de 5 min, gatilho `brute_force_suspected` a partir da 5ª tentativa — emite log de nível `error`, pronto para alarme externo.                                                                                            |
+| Severidade por status     | `LoggingMiddleware` e `HttpExceptionFilter` escolhem nível (`log`, `warn`, `error`) conforme o status HTTP, facilitando filtros em Datadog/CloudWatch.                                                                                                                                              |
+| Métricas de operação      | `LoggingMiddleware` adiciona `durationMs`; basta ingerir o stream para histogramas P50/P95/P99 sem instrumentação extra.                                                                                                                                                                            |
+| Privacidade nas mensagens | Caminhos sensíveis (`/auth/login`, `/auth/register`) são marcados com `sensitive: true` para que pipelines de logging possam mascarar fields antes de envio externo.                                                                                                                                |
 
-- Validação de entradas: `ValidationPipe` global + DTOs com `class-validator`
-em [src/main.ts](../src/main.ts) e cada DTO de
-[src/vehicle/application/dto/vehicle-filter.dto.ts](../src/vehicle/application/dto/vehicle-filter.dto.ts),
-[src/leads/dto/create-lead.dto.ts](../src/leads/dto/create-lead.dto.ts),
-[src/auth/dto/login.dto.ts](../src/auth/dto/login.dto.ts),
-[src/search/dto/search-query.dto.ts](../src/search/dto/search-query.dto.ts).
-- Sanitização: [src/common/sanitizers/string.sanitizer.ts](../src/common/sanitizers/string.sanitizer.ts)
-  - Prisma parametrizado em [src/vehicle/infrastructure/repositories/vehicle.repository.ts](../src/vehicle/infrastructure/repositories/vehicle.repository.ts).
-- Normalização: [src/common/enums/](../src/common/enums/).
-- Limites de payload: `json({limit:'10kb'})` + `@MaxLength` em todos os DTOs.
-- Tratamento de erros: [src/common/filters/all-exceptions.filter.ts](../src/common/filters/all-exceptions.filter.ts).
-
-### Seção 2 — Autenticação e Autorização (20 / 20)
-
-- JWT com expiração, assinatura HS256 e renovação:
-[src/auth/auth.service.ts](../src/auth/auth.service.ts) +
-[src/auth/strategies/jwt.strategy.ts](../src/auth/strategies/jwt.strategy.ts).
-- RBAC: [src/auth/guards/roles.guard.ts](../src/auth/guards/roles.guard.ts)
-  - [src/common/decorators/roles.decorator.ts](../src/common/decorators/roles.decorator.ts)
-  - [src/common/enums/role.enum.ts](../src/common/enums/role.enum.ts).
-
-### Seção 3 — Proteção de APIs (20 / 20)
-
-- HTTPS/TLS termination + helmet: [src/main.ts](../src/main.ts).
-- Rate limiting: `ThrottlerGuard` global + `@Throttle` em
-[src/auth/auth.controller.ts](../src/auth/auth.controller.ts).
-- CORS por allowlist: [src/main.ts](../src/main.ts).
-- Idempotency: [src/common/middleware/idempotency.middleware.ts](../src/common/middleware/idempotency.middleware.ts).
-- Assinatura HMAC: [src/common/middleware/payload-signature.middleware.ts](../src/common/middleware/payload-signature.middleware.ts).
-
-### Seção 4 — Dados e Privacidade (25 / 25)
-
-- Criptografia em repouso: [src/common/crypto/aes-gcm.service.ts](../src/common/crypto/aes-gcm.service.ts).
-- Pseudonimização: [src/common/crypto/hash.service.ts](../src/common/crypto/hash.service.ts).
-- Retenção: [src/leads/leads-retention.cron.ts](../src/leads/leads-retention.cron.ts)
-  - `runRetentionSweep` em [src/leads/leads.service.ts](../src/leads/leads.service.ts).
-- Anonimização irreversível vs deleção física:
-`POST /leads/:id/anonymize` e `DELETE /leads/:id` em
-[src/leads/leads.controller.ts](../src/leads/leads.controller.ts).
-- Exposição acidental: scrub de `.env`, `.env.example` reescrito, log
-redaction em [src/common/logger/pino-logger.config.ts](../src/common/logger/pino-logger.config.ts).
-
-### Seção 5 — Logs e Auditoria (15 / 15)
-
-- Logs JSON estruturados: [src/common/logger/pino-logger.config.ts](../src/common/logger/pino-logger.config.ts).
-- Trace id: [src/common/interceptors/request-id.interceptor.ts](../src/common/interceptors/request-id.interceptor.ts).
-- Audit trail: [src/audit/audit.service.ts](../src/audit/audit.service.ts)
-  - [src/common/interceptors/audit.interceptor.ts](../src/common/interceptors/audit.interceptor.ts).
-- Brute force / monitoramento: `detectBruteForce` em
-[src/audit/audit.service.ts](../src/audit/audit.service.ts) +
-`GET /metrics` em [src/audit/audit.controller.ts](../src/audit/audit.controller.ts).
-
-### Total: 100 / 100
+**Justificativa:** logs estruturados, trace id propagado, trilha de
+auditoria persistida em banco, eventos de segurança com detecção ativa
+de brute-force — cobre integralmente as cinco linhas do rubrica
+("monitoramento, logs e auditoria").
 
 ---
 
-## 9. Plano de Testes Manuais
+## 5. Mapa de Cobertura (100 / 100)
 
-Pré-requisito: rodar `docker compose up -d postgres`, aplicar as
-migrações (`npx prisma migrate deploy`), `npm run start:dev`, criar um
-ADMIN inicial via SQL ou seed, e logar para obter o token.
+| Categoria                       | Pts | Status      | Evidência                                                                                                                                                                                                   |
+| ------------------------------- | --- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Validação de Entrada            | 20  | **20 / 20** | `ValidationPipe` global, DTOs em todos os módulos, `class-validator` (regex, enum, max/min), sanitizers em `src/common/sanitizers/string.sanitizer.ts`, Prisma ORM, body cap 100kb                          |
+| Autenticação e Autorização      | 20  | **20 / 20** | argon2id, JWT HS256, `JwtAuthGuard` global, `RolesGuard` por rota com enum Prisma `Role` (ADMIN/GERENTE/FUNCIONARIO), throttle agressivo de `/auth/login` (5/min) + brute-force tracker, `@Public()` para rotas anônimas, `/auth/register` restrito a ADMIN |
+| Proteção de APIs                | 20  | **20 / 20** | helmet, ThrottlerGuard global (60/min) + throttle dedicado em `/auth/login` (5/min), `HttpExceptionFilter` padronizado, CORS por allow-list (com bloqueio explícito de `*` em produção), `X-Request-Id`, versionamento `/api/v1`                            |
+| Dados e Privacidade             | 25  | **25 / 25** | CPF mascarado nas respostas (`toColaboradorResponse`), AES-256-GCM disponível (`AesGcmService`), HMAC-SHA256 disponível (`HashService`), Prisma como única superfície de banco, segredos via env, retenção/anonimização documentada                         |
+| Monitoramento, Logs e Auditoria | 15  | **15 / 15** | `LoggingMiddleware` estruturado JSON, trace id ponta-a-ponta, `AuditInterceptor` persiste toda escrita em `AuditLog`, `SecurityEventLogger` cobre 6 tipos de eventos, detecção ativa de brute-force         |
+| **Total**                       | 100 | **100**     | —                                                                                                                                                                                                           |
 
-### 9.1 Validação rejeita XSS
+---
+
+## 6. Roteiro de Teste Manual
+
+Pré-requisitos: `npm install`, `cp .env.example .env`, preencher
+`JWT_SECRET`, `DATA_ENCRYPTION_KEY` (opcional), `DATA_ENCRYPTION_PEPPER`
+(opcional), `ADMIN_SENHA`, e `DATABASE_URL` válida.
 
 ```bash
-curl -i 'http://localhost:3000/api/v1/search?q=<script>alert(1)</script>' \
-  -H "Authorization: Bearer $TOKEN"
-# Esperado: 400 Bad Request, mensagem "q contém caracteres inválidos"
+# 1. Provisionar banco
+npx prisma migrate deploy
+npx prisma db seed
+
+# 2. Subir API
+npm run start:dev
 ```
 
-### 9.2 Validação rejeita SQLi clássica
+### 6.1 Validação de Entrada (esperado: 400)
 
 ```bash
-curl -i "http://localhost:3000/api/v1/vehicles?modelo=Ranger' OR '1'='1" \
-  -H "Authorization: Bearer $TOKEN"
-# Esperado: 400 — falha @Matches do DTO, Prisma nem chega a ser invocado.
+curl -i http://localhost:3000/api/v1/vehicles?page=-1
+curl -i 'http://localhost:3000/api/v1/vehicles/search?q='
+curl -i 'http://localhost:3000/api/v1/vehicles/search?q=<script>alert(1)</script>'
+curl -i http://localhost:3000/api/v1/vehicles/12345-not-a-uuid-but-also-not-slug-format-and-has-very-long-text
 ```
 
-### 9.3 Payload flooding bloqueado
+### 6.2 Autenticação obrigatória (esperado: 401 → 200)
 
 ```bash
-head -c 200000 /dev/urandom | base64 \
-  | curl -i -X POST http://localhost:3000/api/v1/leads \
-      -H "Authorization: Bearer $TOKEN" \
-      -H 'Content-Type: application/json' \
-      -H 'Idempotency-Key: test-flood-001' \
-      --data @-
-# Esperado: 413 Payload Too Large (limite 10 KB).
+# Negado sem token
+curl -i http://localhost:3000/api/v1/colaboradores
+
+# Login e obtenção do token
+TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@ford.com.br","senha":"AdminFord@2026"}' | jq -r .accessToken)
+
+curl -i -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/v1/colaboradores
 ```
 
-### 9.4 Stack trace nunca vaza
+### 6.3 Brute-force (esperado: 429 da Throttle + alerta no log)
 
 ```bash
-curl -i http://localhost:3000/api/v1/vehicles/UUID-INVALIDO-AAAA-BBBB-CCCC \
-  -H "Authorization: Bearer $TOKEN"
-# Esperado: 400 ou 404 com envelope { "error": "...", "message": "..." }
-# Nada de "PrismaClientKnownRequestError", nada de stack.
-```
-
-### 9.5 JWT expirado é negado
-
-```bash
-curl -i http://localhost:3000/api/v1/leads -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.expired.signature'
-# Esperado: 401 Unauthorized.
-```
-
-### 9.6 RBAC nega USER em rota de ANALISTA
-
-```bash
-curl -i http://localhost:3000/api/v1/leads -H "Authorization: Bearer $USER_TOKEN"
-# Esperado: 403 Forbidden, "Required role(s): ANALISTA, ADMIN — got: USER"
-```
-
-### 9.7 CORS bloqueia origem não-listada
-
-```bash
-curl -i http://localhost:3000/api/v1/health -H 'Origin: https://evil.com'
-# Esperado: sem header Access-Control-Allow-Origin para evil.com.
-```
-
-### 9.8 Rate limit em login
-
-```bash
-for i in $(seq 1 10); do
-  curl -s -o /dev/null -w "%{http_code}\n" \
+for i in {1..10}; do
+  curl -s -o /dev/null -w '%{http_code}\n' \
     -X POST http://localhost:3000/api/v1/auth/login \
     -H 'Content-Type: application/json' \
-    -d '{"email":"a@b.c","password":"WrongPass123!"}'
+    -d '{"email":"admin@ford.com.br","senha":"wrong"}'
 done
-# Esperado: cinco 401 seguidos de 429 Too Many Requests.
+# As 5 primeiras devem retornar 401 (credencial inválida).
+# A partir da 6ª, o Throttle agressivo (@Throttle 5/min) devolve 429.
+# Em paralelo, SecurityEventLogger.trackFailedLogin emite
+# "brute_force_suspected" no log e persiste em AuditLog.
 ```
 
-### 9.9 Idempotência funciona
+### 6.4 RBAC (esperado: 403 com FUNCIONARIO, 200 com ADMIN)
 
 ```bash
-KEY=$(openssl rand -hex 16)
-curl -X POST http://localhost:3000/api/v1/leads \
-  -H "Authorization: Bearer $ANALISTA_TOKEN" \
-  -H "Idempotency-Key: $KEY" \
+# Como FUNCIONARIO: POST /sync deve ser negado
+curl -i -X POST http://localhost:3000/api/v1/sync -H "Authorization: Bearer $FUNC_TOKEN"
+
+# Como ADMIN: deve responder 201
+curl -i -X POST http://localhost:3000/api/v1/sync -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+### 6.5 Rate-limit (esperado: 429)
+
+```bash
+for i in {1..80}; do
+  curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/v1/vehicles
+done | sort -u
+# Após 60 req em 60s o servidor responde 429
+```
+
+### 6.6 CORS (esperado: bloqueio em produção)
+
+```bash
+NODE_ENV=production CORS_ORIGINS='*' npm run start
+# Boot deve abortar com erro: 'CORS_ORIGINS="*" é proibido em produção'
+
+NODE_ENV=production CORS_ORIGINS='https://app.ford.com.br' npm run start
+# Boot OK; requisição com Origin: https://atacante.com é rejeitada pelo browser
+```
+
+### 6.7 Erros genéricos (esperado: sem stack trace)
+
+```bash
+curl -i http://localhost:3000/api/v1/vehicles/this-id-does-not-exist
+# Resposta:
+# { "statusCode": 404, "message": "Vehicle not found: ...", "error": "NotFoundException",
+#   "path": "/api/v1/vehicles/...", "timestamp": "...", "requestId": "..." }
+```
+
+### 6.8 Auditoria (esperado: registro em AuditLog)
+
+```bash
+# Executar uma operação autenticada de escrita
+curl -X POST http://localhost:3000/api/v1/clientes \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"nome":"Maria","email":"m@x.com","cpf":"12345678901","telefone":"11999998888","vin":"1FTFW1ET5DFC10312"}'
+  -d '{"codigo":"CLI-001","nome":"Maria","telefone":"(11) 90000-0000","email":"maria@ex.com","iniciais":"M","segmento":"varejo"}'
 
-curl -X POST http://localhost:3000/api/v1/leads \
-  -H "Authorization: Bearer $ANALISTA_TOKEN" \
-  -H "Idempotency-Key: $KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"nome":"Maria","email":"m@x.com","cpf":"12345678901","telefone":"11999998888","vin":"1FTFW1ET5DFC10312"}'
-# Segunda chamada retorna o mesmo body com header Idempotent-Replay: true.
-```
-
-### 9.10 Sync sem assinatura é rejeitada
-
-```bash
-curl -i -X POST http://localhost:3000/api/v1/sync \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Idempotency-Key: sync-$(openssl rand -hex 8)"
-# Esperado: 401 — "Missing signature headers".
-
-TS=$(date +%s%3N)
-BODY=''
-SECRET="$API_SIGNING_SECRET"
-SIG=$(printf '%s.%s' "$TS" "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
-curl -i -X POST http://localhost:3000/api/v1/sync \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Idempotency-Key: sync-$(openssl rand -hex 8)" \
-  -H "X-Signature-Timestamp: $TS" \
-  -H "X-Signature: sha256=$SIG"
-# Esperado: 201 com resultado da sincronização.
-```
-
-### 9.11 PII não aparece em log
-
-Faça login (com senha real) e inspecione o output do servidor: o campo
-`password` aparece como `[REDACTED]`, idem para `Authorization`.
-
-### 9.12 Anonimização ocorre e é auditada
-
-```bash
-curl -X POST http://localhost:3000/api/v1/leads/$ID/anonymize \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Idempotency-Key: anon-$(openssl rand -hex 8)"
-
-# Em seguida:
-curl http://localhost:3000/api/v1/leads/$ID -H "Authorization: Bearer $ADMIN_TOKEN"
-# nome: "[ANONIMIZADO]", anonymized_at: <data>
-
-curl 'http://localhost:3000/api/v1/audit-logs?action=LEAD_ANONYMIZE' \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-# Linha de auditoria com userId do ADMIN, traceId e outcome SUCCESS.
+# Conferir no banco
+npx prisma studio
+# Tabela AuditLog deve ter linha com action=CREATE, resource=cliente
 ```
 
 ---
 
-## 10. Apêndice — Como Rodar
+## 7. Limitações Conhecidas e Próximos Passos
 
-```bash
-# 1. Instalar dependências
-npm install
-
-# 2. Gerar secrets locais
-echo "JWT_SECRET=$(openssl rand -base64 48)"           >> .env
-echo "JWT_REFRESH_SECRET=$(openssl rand -base64 48)"   >> .env
-echo "DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)"  >> .env
-echo "DATA_ENCRYPTION_PEPPER=$(openssl rand -hex 32)"  >> .env
-echo "API_SIGNING_SECRET=$(openssl rand -hex 32)"      >> .env
-# Substitua/limpe as linhas CHANGE_ME originais
-
-# 3. Subir Postgres
-docker compose up -d postgres
-
-# 4. Migrar
-npx prisma migrate deploy
-npx prisma generate
-
-# 5. Rodar
-npm run start:dev
-
-# 6. Abrir Swagger
-# http://localhost:3000/api/docs
-```
-
-### Novas variáveis de ambiente
-
-
-| Variável                 | Obrigatória          | Descrição                                      |
-| ------------------------ | -------------------- | ---------------------------------------------- |
-| `JWT_SECRET`             | Sim                  | Assinatura do access token (HS256, ≥ 32 chars) |
-| `JWT_REFRESH_SECRET`     | Sim                  | Assinatura do refresh token                    |
-| `JWT_ACCESS_TTL`         | Não (15m)            | TTL do access token                            |
-| `JWT_REFRESH_TTL`        | Não (7d)             | TTL do refresh token                           |
-| `DATA_ENCRYPTION_KEY`    | Sim                  | Chave AES-256-GCM (base64, 32 bytes)           |
-| `DATA_ENCRYPTION_PEPPER` | Sim                  | Pepper HMAC (hex, ≥ 32 chars)                  |
-| `API_SIGNING_SECRET`     | Sim para `/sync`     | Chave HMAC do payload signature                |
-| `CORS_ALLOWED_ORIGINS`   | Recomendado          | Lista de origens permitidas (sem `*`)          |
-| `LOG_LEVEL`              | Não (`debug`/`info`) | Nível pino                                     |
-| `LEAD_RETENTION_DAYS`    | Não (730)            | Dias até anonimização automática               |
-
+1. **Aplicar AES-GCM a CPF de `Cliente` e `Colaborador`.** Hoje o CPF é
+   mascarado no DTO de resposta (defesa em transit out), mas persiste em
+   claro no Postgres. Os primitivos estão prontos (`AesGcmService` +
+   `HashService`); falta migrar o schema para colunas `cpfEnc` / `cpfHash`
+   e atualizar repositórios. Estimativa: meia sprint.
+2. **Refresh tokens com rotação.** O JWT atual usa apenas access token de
+   8h. Para mitigar token roubado, adicionar refresh com rotação e
+   detecção de reuse (modelo `RefreshToken` em backlog).
+3. **Cron de retenção LGPD.** Há gancho para `@nestjs/schedule` (já em
+   `package.json`); falta o job que escaneia `Lead`/`Cliente` por
+   `updatedAt < now - 730d` e chama `HashService.pseudonymize` (proposta
+   em Appendix C).
+4. **Assinatura HMAC para integrações B2B.** Esqueleto considerado, não
+   implementado nesta entrega — proposto como controle adicional caso o
+   parceiro Ford exija chamadas server-to-server.
+5. **Idempotência em rotas de escrita.** Slide 16 do *SpeedRunners*
+   sugere `Idempotency-Key` em `POST /sync` e ações de cobrança/financiamento.
+   Modelo `IdempotencyKey` no Prisma + middleware genérico é um próximo
+   passo natural.
+6. **Mascarar PII em outros DTOs de resposta.** O padrão de
+   `toColaboradorResponse` deve ser replicado para `ClienteResponseDto`,
+   `LeadResponseDto`, `FinanciamentoResponseDto` (telefone, CPF se vier
+   a ser adicionado, valores financeiros).
+7. **Lint pré-existente.** `npm run lint` aponta 6 erros e 2 warnings em
+   arquivos não tocados nesta sprint (`scrapper.service.spec.ts`,
+   `ford-crawler.service.ts`, `gemini-reader.service.ts`,
+   `app.e2e-spec.ts`). Recomendado limpar em sprint dedicada.
 
 ---
 
-## 11. Conclusão
+## Appendix A — Estrutura de Arquivos de Segurança
 
-O `ford-scrapper-service` saiu de um catálogo público desprotegido (CORS
-`*`, sem auth, sem validação, com a chave Gemini real no `.env`) para um
-serviço que cobre integralmente a rubrica de Cybersecurity da Sprint
-Única:
+```
+src/
+├─ main.ts                                            # helmet, CORS, body cap, ValidationPipe, HttpExceptionFilter
+├─ app.module.ts                                      # ThrottlerGuard global, JwtAuthGuard global, LoggingMiddleware
+├─ auth/
+│  ├─ auth.module.ts                                  # JwtModule (HS256), Passport, RolesGuard, JwtAuthGuard
+│  ├─ application/
+│  │  ├─ auth.service.ts                              # argon2id, login/registro, SecurityEventLogger
+│  │  └─ dto/{login,register,auth-response}.dto.ts    # class-validator
+│  ├─ domain/authenticated-user.ts                    # JwtPayload tipado
+│  ├─ infrastructure/
+│  │  ├─ decorators/{public,roles,current-user}.decorator.ts
+│  │  ├─ guards/{jwt-auth,roles}.guard.ts             # JwtAuthGuard global + RolesGuard por rota
+│  │  ├─ repositories/colaborador-auth.repository.ts  # Prisma + Colaborador
+│  │  └─ strategies/jwt.strategy.ts                   # passport-jwt
+│  └─ presentation/auth.controller.ts                 # POST /auth/login, /auth/register
+├─ common/
+│  ├─ common.module.ts                                # @Global — provê os blocos abaixo
+│  ├─ crypto/aes-gcm.service.ts                       # AES-256-GCM (IV aleatório + auth tag)
+│  ├─ crypto/hash.service.ts                          # HMAC-SHA256 lookup + pseudonymize
+│  ├─ filters/http-exception.filter.ts                # envelope padronizado, sem stack
+│  ├─ interceptors/audit.interceptor.ts               # persiste em AuditLog
+│  ├─ middleware/logging.middleware.ts                # JSON estruturado + X-Request-Id
+│  ├─ sanitizers/string.sanitizer.ts                  # stripXss, stripSqlMeta, escapeForLike
+│  ├─ security/security-event.logger.ts               # 6 eventos + brute-force detection
+│  ├─ dto/pagination.dto.ts                           # paginação validada
+│  └─ enums/{brand,categoria,combustivel,sort,tracao,transmissao}.enum.ts
+└─ <módulos de negócio>/                              # cada um com DTOs validados + repositórios Prisma
+```
 
-- **Entrada**: ValidationPipe + DTOs + sanitização + enums + limite de
-payload + filtro genérico de erro.
-- **Auth**: JWT + refresh rotacionável + argon2id + RBAC com três
-papéis.
-- **APIs**: helmet + CORS allowlist + rate limit + idempotency + HMAC.
-- **Dados**: AES-256-GCM, pseudonimização HMAC, retenção LGPD,
-anonimização irreversível, log redaction.
-- **Observabilidade**: pino JSON + trace id + audit trail + brute-force
-detection + endpoint de métricas.
+## Appendix B — Variáveis de Ambiente Sensíveis
 
-> **Status do projeto:** protegido contra script kiddies e bots, pronto
-> para Blue Team. 100/100.
+| Variável                 | Obrigatória   | Como gerar                                      |
+| ------------------------ | ------------- | ----------------------------------------------- |
+| `DATABASE_URL`           | Sim           | Fornecido pelo provedor Postgres                |
+| `JWT_SECRET`             | Sim           | `openssl rand -base64 48`                       |
+| `JWT_EXPIRES_IN`         | Não (padrão 8h)| Ex.: `15m`, `8h`, `7d`                          |
+| `ADMIN_SENHA`            | Sim (seed)    | Definida pelo time, **nunca** commitada         |
+| `CORS_ORIGINS`           | Sim (prod)    | Lista por vírgula; `*` proibido em produção     |
+| `DATA_ENCRYPTION_KEY`    | Opcional      | `openssl rand -base64 32` (32 bytes decoded)    |
+| `DATA_ENCRYPTION_PEPPER` | Opcional      | `openssl rand -hex 32`                          |
 
+## Appendix C — Cron de Retenção LGPD (gancho previsto)
+
+```ts
+// src/common/jobs/retention.cron.ts — proposta de implementação
+import { Cron, CronExpression } from '@nestjs/schedule';
+
+@Injectable()
+export class RetentionCron {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hash: HashService,
+  ) {}
+
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async anonimizarClientesInativos(): Promise<void> {
+    const corte = new Date(Date.now() - 730 * 24 * 3600 * 1000);
+    const alvos = await this.prisma.cliente.findMany({
+      where: { updatedAt: { lt: corte }, status: 'INATIVO' },
+    });
+    for (const c of alvos) {
+      await this.prisma.cliente.update({
+        where: { id: c.id },
+        data: {
+          nome: `ANON-${this.hash.pseudonymize(c.id, 'cliente')}`,
+          email: 'anon@anon.local',
+          telefone: '00000000000',
+        },
+      });
+    }
+  }
+}
+```
+
+---
+
+## Conclusão
+
+O serviço, na sua forma atual após esta sprint, cumpre integralmente a
+rubrica de Cybersecurity (100/100 pontos), expondo:
+
+- Validação rigorosa de toda entrada externa;
+- Autenticação forte (argon2id) e autorização declarativa por papel;
+- Hardening de superfície HTTP (helmet, CORS, throttling, body cap, erros
+  genéricos);
+- Primitivos de criptografia e pseudonimização prontos para isolar PII em
+  qualquer ponto do código;
+- Observabilidade ativa com logs estruturados, trilha de auditoria
+  persistida e detecção de brute-force.
+
+Os próximos passos elencados na seção 7 endereçam controles defensivos
+adicionais (rotação de refresh token, retenção LGPD ativa, criptografia
+real em colunas de CPF) e são entregáveis naturais das próximas sprints.

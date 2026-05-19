@@ -1,33 +1,38 @@
-import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Logger as PinoNestLogger } from 'nestjs-pino';
 import helmet from 'helmet';
 import { json, urlencoded } from 'express';
-import { AppModule } from './app.module.js';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 
+import { AppModule } from './app.module.js';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
+
+/**
+ * Bootstrap endurecido segundo a rubrica de Cybersecurity Sprint:
+ * - Helmet (slide 15) define HSTS, X-Content-Type-Options, frameguard etc.
+ * - Body size cap em 100kb (slide 8) impede payload flooding.
+ * - CORS por allow-list (slide 17) — `*` é rejeitado explicitamente.
+ * - ValidationPipe global com whitelist + forbidNonWhitelisted (slide 5).
+ * - HttpExceptionFilter padronizado evita vazar stack traces (slide 9).
+ * - `trust proxy` repassa o IP real do cliente para audit/logging.
+ */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
-  });
+  const app = await NestFactory.create(AppModule, { bodyParser: true });
   const logger = new Logger('Bootstrap');
 
-  app.useLogger(app.get(PinoNestLogger));
+  app.setGlobalPrefix('api/v1');
 
-  // Trust the first reverse proxy (Nginx / Traefik) for X-Forwarded-* headers.
-  // Required so rate limiter and audit logs see the real client IP after TLS termination.
+  // Trust o primeiro reverse proxy (TLS terminator) para X-Forwarded-*.
   const httpAdapter = app.getHttpAdapter();
   const expressInstance = httpAdapter.getInstance() as unknown as {
     set: (k: string, v: unknown) => void;
   };
   expressInstance.set('trust proxy', 1);
 
-  // Payload size cap (slide 8) — defeats buffer-flooding payloads.
-  app.use(json({ limit: '10kb' }));
-  app.use(urlencoded({ limit: '10kb', extended: true }));
+  // Cap em 100kb evita buffer-flooding em rotas JSON-heavy.
+  app.use(json({ limit: '100kb' }));
+  app.use(urlencoded({ limit: '100kb', extended: true }));
 
-  // Security headers / HSTS / no X-Powered-By (slide 15).
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -35,86 +40,92 @@ async function bootstrap() {
     }),
   );
 
-  app.setGlobalPrefix('api/v1');
-
-  // Strict CORS by allowlist (slide 17 — "nunca use *").
-  const rawOrigins = process.env.CORS_ALLOWED_ORIGINS ?? '';
-  const allowList = rawOrigins
+  // CORS por allow-list. Aceita `CORS_ORIGINS` (lista por vírgulas).
+  // Em produção, `*` é explicitamente rejeitado.
+  const rawOrigins = (process.env.CORS_ORIGINS ?? '*')
     .split(',')
-    .map((o) => o.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
-  if (allowList.includes('*')) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const isWildcardOnly =
+    rawOrigins.length === 1 && rawOrigins[0] === '*';
+  if (isProd && isWildcardOnly) {
     throw new Error(
-      'CORS_ALLOWED_ORIGINS contains "*", which is forbidden. ' +
-        'Provide a comma-separated list of fully-qualified origins.',
+      'CORS_ORIGINS="*" é proibido em produção. Defina uma lista de origens confiáveis.',
     );
   }
-  type CorsCallback = (err: Error | null, allow?: boolean) => void;
+
   app.enableCors({
-    origin: (origin: string | undefined, callback: CorsCallback) => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      if (allowList.length === 0 || allowList.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`CORS: origin ${origin} not allowed`), false);
-    },
+    origin: isWildcardOnly ? true : rawOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders:
-      'Content-Type,Authorization,Idempotency-Key,X-Signature,X-Signature-Timestamp,X-Trace-Id',
-    credentials: true,
+    allowedHeaders: 'Content-Type,Authorization,X-Request-Id',
+    exposedHeaders: 'X-Request-Id',
+    credentials: false,
     maxAge: 600,
   });
 
-  // Global validation (slide 5) — strips unknown properties, transforms types,
-  // hides validation messages in production to avoid info disclosure.
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
-      disableErrorMessages: process.env.NODE_ENV === 'production',
+      stopAtFirstError: false,
+      disableErrorMessages: isProd,
     }),
   );
 
-  // Global exception filter (slide 9) — generic envelope, no stack traces.
-  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Swagger
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Ford Brasil Vehicle Catalog API')
+    .setTitle('Ford Brasil Vehicle Catalog & Dealership API')
     .setDescription(
-      'API profissional para consulta de veículos Ford Brasil. ' +
-        'Dados coletados e normalizados exclusivamente a partir de fontes oficiais (ford.com.br). ' +
-        'Hardened conforme rubrica de Cybersecurity Sprint.',
+      [
+        'API profissional para consulta de veículos Ford Brasil e gestão da concessionária.',
+        '',
+        'Inclui: autenticação JWT (RBAC), gestão de colaboradores, clientes, estoque, leads, financiamentos,',
+        'ordens de serviço, técnicos, metas, avaliações (públicas) e dashboard agregado.',
+        '',
+        'Camadas de segurança: Helmet, CORS configurável, ThrottlerGuard global, JwtAuthGuard global,',
+        'ValidationPipe global, HttpExceptionFilter padronizado, LoggingMiddleware + AuditInterceptor,',
+        'AES-256-GCM e HMAC-SHA256 disponíveis para dados sensíveis.',
+      ].join('\n'),
     )
     .setVersion('1.1.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
-    .addTag('Health', 'Health check público')
-    .addTag('Auth', 'Login, refresh e gerenciamento de sessão')
-    .addTag('Vehicles', 'Consulta e filtro de veículos (autenticado)')
-    .addTag('Leads', 'Cadastro e gestão de leads (PII criptografada)')
-    .addTag('Audit', 'Trilha de auditoria e métricas (ADMIN)')
-    .addTag('Categories', 'Categorias de veículos')
-    .addTag('Colors', 'Cores disponíveis')
-    .addTag('Models', 'Modelos de veículos')
-    .addTag('Versions', 'Versões de veículos')
-    .addTag('Search', 'Busca textual')
-    .addTag('Sync', 'Sincronização de dados (ADMIN)')
-    .addTag('Sources', 'Fontes oficiais utilizadas')
-    .addTag('Stats', 'Estatísticas do catálogo (ANALISTA/ADMIN)')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Cole o accessToken retornado por POST /auth/login',
+      },
+      'JWT',
+    )
+    .addTag('Auth', 'Autenticação JWT, login e registro de colaboradores')
+    .addTag('Colaboradores', 'CRUD de colaboradores e gestão de papéis')
+    .addTag('Clientes', 'CRUD de clientes da concessionária')
+    .addTag('Estoque', 'CRUD de veículos em estoque')
+    .addTag('Leads', 'Pipeline de leads inteligentes')
+    .addTag('Financiamentos', 'Carteira de financiamentos')
+    .addTag('Servicos', 'Ordens de serviço (oficina)')
+    .addTag('Tecnicos', 'Equipe técnica da oficina')
+    .addTag('Metas', 'Metas e indicadores comerciais')
+    .addTag('Avaliacoes', 'Avaliações de clientes (endpoints públicos)')
+    .addTag('Dashboard', 'KPIs agregados em tempo real')
+    .addTag('Health', 'Health check do serviço')
+    .addTag('Vehicles', 'Catálogo Ford (scrapping)')
+    .addTag('Scrapper', 'Disparo manual do scraping (autenticado)')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`Application running on http://localhost:${port}`);
   logger.log(`Swagger docs available at http://localhost:${port}/api/docs`);
 }
+
 void bootstrap();

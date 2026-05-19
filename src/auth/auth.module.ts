@@ -1,21 +1,44 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule, type JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { AuthController } from './auth.controller.js';
-import { AuthService } from './auth.service.js';
-import { JwtStrategy } from './strategies/jwt.strategy.js';
-import { AuditModule } from '../audit/audit.module.js';
+import { AuthService } from './application/auth.service.js';
+import { JwtStrategy } from './infrastructure/strategies/jwt.strategy.js';
+import { JwtAuthGuard } from './infrastructure/guards/jwt-auth.guard.js';
+import { RolesGuard } from './infrastructure/guards/roles.guard.js';
+import { ColaboradorAuthRepository } from './infrastructure/repositories/colaborador-auth.repository.js';
+import { AuthController } from './presentation/auth.controller.js';
 
 @Module({
   imports: [
-    ConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({}),
-    AuditModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): JwtModuleOptions => {
+        const secret = config.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error('JWT_SECRET nao definido no ambiente');
+        }
+        const expiresIn = config.get<string>('JWT_EXPIRES_IN') ?? '8h';
+        return {
+          secret,
+          signOptions: {
+            expiresIn: expiresIn as unknown as number,
+            algorithm: 'HS256',
+          },
+        };
+      },
+    }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    RolesGuard,
+    ColaboradorAuthRepository,
+  ],
+  exports: [AuthService, JwtAuthGuard, RolesGuard, JwtStrategy, JwtModule],
 })
 export class AuthModule {}
