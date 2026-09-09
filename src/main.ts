@@ -20,14 +20,15 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: true });
   const logger = new Logger('Bootstrap');
 
-  app.setGlobalPrefix('api/v1');
+  // Redirecionamento amigável de / e /api para a documentação Swagger
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.get(['/', '/api'], (_req: any, res: any) => res.redirect('/api/docs'));
+  expressApp.get('/favicon.ico', (_req: any, res: any) => res.status(204).end());
+
+  app.setGlobalPrefix('api');
 
   // Trust o primeiro reverse proxy (TLS terminator) para X-Forwarded-*.
-  const httpAdapter = app.getHttpAdapter();
-  const expressInstance = httpAdapter.getInstance() as unknown as {
-    set: (k: string, v: unknown) => void;
-  };
-  expressInstance.set('trust proxy', 1);
+  expressApp.set('trust proxy', 1);
 
   // Cap em 100kb evita buffer-flooding em rotas JSON-heavy.
   app.use(json({ limit: '100kb' }));

@@ -43,30 +43,31 @@ Este serviço atua como backend de catálogo digital, coletando automaticamente 
 
 ```
 src/
-├── main.ts                    # Bootstrap + Swagger + CORS
-├── app.module.ts              # Root module (todos os imports)
+├── main.ts                    # Bootstrap (Helmet, CORS, Throttler, Global Pipes/Filters, Swagger)
+├── app.module.ts              # Root module (registro de rotas, middlewares e guards globais)
+│
+├── auth/                      # Autenticação JWT, login, registro e Guards RBAC
+├── colaborador/               # Gestão de colaboradores e papéis (ADMIN, GERENTE, FUNCIONARIO)
+├── cliente/                   # Gestão de clientes da concessionária
+├── estoque/                   # Gestão de estoque de veículos (novos e seminovos)
+├── lead/                      # Pipeline e scoring de leads comerciais
+├── financiamento/             # Simulações e propostas de financiamento
+├── servico/                   # Ordens de serviço e pós-venda
+├── tecnico/                   # Equipe técnica da oficina
+├── meta/                      # Gestão de metas comerciais e operacionais
+├── avaliacao/                 # Avaliações públicas de clientes
+├── dashboard/                 # KPIs agregados e visão analítica em tempo real
 │
 ├── health/                    # GET /health
-├── vehicle/                   # GET /vehicles, GET /vehicles/:id
+├── vehicle/                   # Catálogo de veículos Ford (GET /vehicles, GET /vehicles/:id)
 │   ├── domain/                #   Entidades de domínio
 │   ├── application/           #   Services, DTOs, Mappers
 │   ├── infrastructure/        #   Repositórios Prisma
+│   ├── sync/                  #   Sincronização e histórico
 │   └── presentation/          #   Controller REST
 │
-├── categories/                # GET /categories
-├── colors/                    # GET /colors
-├── models/                    # GET /models
-├── versions/                  # GET /versions
-├── search/                    # GET /search?q=
-├── sync/                      # POST /sync + GET /sync/history
-├── sources/                   # GET /sources
-├── stats/                     # GET /stats
-│
-└── scrapper/                  # Coleta de dados (crawler + parsers)
-    ├── application/           #   Orquestração de scraping
-    ├── domain/                #   Interfaces de dados coletados
-    ├── infrastructure/        #   Crawler, PDF downloader, Gemini, PDF parser
-    └── presentation/          #   Controller legado /scrapper/ford
+├── common/                    # Middlewares (logging, audit), interceptors, filtros e decorators
+└── scrapper/                  # Coleta de dados (crawler + parsers + Gemini)
 ```
 
 Cada módulo segue o padrão **hexagonal** (Ports & Adapters): `domain/` → `application/` → `infrastructure/` → `presentation/`.
@@ -117,7 +118,7 @@ npm run start:dev
 
 ### 6. Acesse
 
-- **API**: http://localhost:3000/api/v1/health
+- **API**: http://localhost:3000/api/health
 - **Swagger**: http://localhost:3000/api/docs
 
 ---
@@ -132,24 +133,31 @@ Sobe PostgreSQL + API automaticamente.
 
 ---
 
-## 📡 Endpoints
+## 📡 Endpoints Principais
+ 
+### Base URL: `http://localhost:3000/api`
 
-### Base URL: `http://localhost:3000/api/v1`
-
-| Método | Endpoint                 | Descrição                                    |
-|--------|--------------------------|----------------------------------------------|
-| GET    | `/health`                | Health check do serviço                      |
-| GET    | `/vehicles`              | Lista veículos (filtros, paginação, sort)    |
-| GET    | `/vehicles/:id`          | Detalhes de um veículo (por UUID ou slug)    |
-| GET    | `/categories`            | Lista categorias distintas                   |
-| GET    | `/colors`                | Lista cores distintas                        |
-| GET    | `/models`                | Lista modelos distintos                      |
-| GET    | `/versions`              | Lista versões distintas                      |
-| GET    | `/search?q=`             | Busca textual em múltiplos campos            |
-| POST   | `/sync`                  | Dispara coleta+persistência completa         |
-| GET    | `/sync/history`          | Histórico de sincronizações                  |
-| GET    | `/sources`               | Fontes oficiais utilizadas                   |
-| GET    | `/stats`                 | Estatísticas do catálogo                     |
+| Módulo | Método | Endpoint | Proteção | Descrição |
+|--------|--------|----------|----------|-----------|
+| **Auth** | POST | `/auth/login` | Pública | Login com registro/email e senha |
+| **Auth** | POST | `/auth/register` | ADMIN | Cadastro de novos colaboradores |
+| **Auth** | GET | `/auth/me` | JWT | Dados do usuário autenticado |
+| **Veículos** | GET | `/vehicles` | Pública | Catálogo de veículos Ford (filtros, paginação, sort) |
+| **Veículos** | GET | `/vehicles/:id` | Pública | Detalhes do veículo por UUID ou slug |
+| **Veículos** | POST | `/vehicles/sync` | JWT | Dispara sincronização com o site Ford |
+| **Veículos** | GET | `/vehicles/sync/history` | JWT | Histórico de execuções de sincronização |
+| **Estoque** | GET/POST | `/estoque` | JWT | Listagem e cadastro de veículos em estoque |
+| **Estoque** | GET/PATCH/DELETE | `/estoque/:id` | JWT | Consulta, edição e exclusão de item em estoque |
+| **Clientes** | GET/POST | `/clientes` | JWT | Listagem e cadastro de clientes |
+| **Leads** | GET/POST | `/leads` | JWT | Pipeline comercial e gestão de leads |
+| **Financiamentos** | GET/POST | `/financiamentos` | JWT | Propostas de financiamento |
+| **Serviços** | GET/POST | `/servicos` | JWT | Ordens de serviço da oficina |
+| **Técnicos** | GET/POST | `/tecnicos` | JWT | Equipe de manutenção e disponibilidade |
+| **Metas** | GET/POST | `/metas` | JWT | Acompanhamento de metas da loja |
+| **Avaliações** | GET/POST | `/avaliacoes` | Pública | Consulta e envio de avaliações de clientes |
+| **Dashboard** | GET | `/dashboard` | JWT | Métricas consolidadas (vendas, leads, oficina) |
+| **Colaboradores** | GET/POST | `/colaboradores` | ADMIN/GERENTE | Gestão de equipe e perfis de acesso |
+| **Health** | GET | `/health` | Pública | Health check do serviço e conexão com banco |
 
 ### Filtros disponíveis em `/vehicles`
 
@@ -172,7 +180,7 @@ Sobe PostgreSQL + API automaticamente.
 **Filtros são combináveis:**
 
 ```
-GET /api/v1/vehicles?categoria=Picape&combustivel=Diesel&sort=preco_asc&page=1&limit=5
+GET /api/vehicles?categoria=Picape&combustivel=Diesel&sort=preco_asc&page=1&limit=5
 ```
 
 ---
