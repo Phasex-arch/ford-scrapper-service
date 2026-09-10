@@ -7,6 +7,8 @@ import { JwtStrategy } from './infrastructure/strategies/jwt.strategy.js';
 import { JwtAuthGuard } from './infrastructure/guards/jwt-auth.guard.js';
 import { RolesGuard } from './infrastructure/guards/roles.guard.js';
 import { ColaboradorAuthRepository } from './infrastructure/repositories/colaborador-auth.repository.js';
+import { ProductionDocsBlocker } from './infrastructure/production-docs.blocker.js';
+import { assertJwtSecret } from './infrastructure/jwt-secret.js';
 import { AuthController } from './presentation/auth.controller.js';
 
 @Module({
@@ -16,10 +18,7 @@ import { AuthController } from './presentation/auth.controller.js';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService): JwtModuleOptions => {
-        const secret = config.get<string>('JWT_SECRET');
-        if (!secret) {
-          throw new Error('JWT_SECRET nao definido no ambiente');
-        }
+        const secret = assertJwtSecret(config.get<string>('JWT_SECRET'));
         const expiresIn = config.get<string>('JWT_EXPIRES_IN') ?? '8h';
         return {
           secret,
@@ -38,6 +37,7 @@ import { AuthController } from './presentation/auth.controller.js';
     JwtAuthGuard,
     RolesGuard,
     ColaboradorAuthRepository,
+    ProductionDocsBlocker,
   ],
   exports: [AuthService, JwtAuthGuard, RolesGuard, JwtStrategy, JwtModule],
 })

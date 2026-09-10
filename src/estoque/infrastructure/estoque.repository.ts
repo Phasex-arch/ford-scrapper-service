@@ -44,7 +44,12 @@ export class EstoqueRepository {
     return this.prisma.estoqueVeiculo.findUnique({ where: { codigo } });
   }
 
-  create(dto: CreateEstoqueDto) {
+  /** Total de registros — base da sequencia de `codigo` gerada no servidor. */
+  totalRegistros() {
+    return this.prisma.estoqueVeiculo.count();
+  }
+
+  create(dto: CreateEstoqueDto & { codigo: string }) {
     return this.prisma.estoqueVeiculo.create({
       data: { ...dto, opcionais: dto.opcionais ?? [] },
     });

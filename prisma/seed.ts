@@ -3,7 +3,8 @@
  *
  * - Cria sempre um colaborador ADMIN inicial (configuravel via .env:
  *   ADMIN_EMAIL, ADMIN_SENHA, ADMIN_NOME, ADMIN_CPF, ADMIN_REGISTRO).
- * - Cria 1 GERENTE e 1 FUNCIONARIO de exemplo (se ainda nao existirem).
+ * - Cria 1 GERENTE e 1 FUNCIONARIO de exemplo (se ainda nao existirem), com as
+ *   senhas vindas de SEED_GERENTE_SENHA e SEED_FUNCIONARIO_SENHA.
  * - Popula tecnicos, clientes, estoque, leads, financiamentos, metas,
  *   avaliacoes e ordens de servico com os dados de `src/exampleData`.
  *
@@ -34,6 +35,35 @@ function hashSenha(senha: string): Promise<string> {
     timeCost: 2,
     parallelism: 1,
   });
+}
+
+/**
+ * P0-4: as senhas dos colaboradores de exemplo estavam escritas no codigo, ou
+ * seja, qualquer pessoa com acesso de leitura ao repositorio tinha um login de
+ * GERENTE valido. Agora vem do ambiente.
+ *
+ * Em producao falha fechado. Fora de producao cai numa senha de demonstracao
+ * conhecida, porque este seed tambem e o fixture de desenvolvimento e da suite
+ * de testes — que sobe o banco do zero e faz login com esses colaboradores.
+ */
+const SENHAS_DEMO = {
+  SEED_GERENTE_SENHA: 'GerenteFord@2026',
+  SEED_FUNCIONARIO_SENHA: 'FuncFord@2026',
+} as const;
+
+function senhaDoAmbiente(variavel: keyof typeof SENHAS_DEMO): string {
+  const valor = process.env[variavel];
+  if (valor) return valor;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `${variavel} nao definido no ambiente. Defina antes de rodar \`prisma:seed\` em producao.`,
+    );
+  }
+  log(
+    'AUTH',
+    `Atencao: ${variavel} ausente, usando senha de demonstracao. Nunca use em producao!`,
+  );
+  return SENHAS_DEMO[variavel];
 }
 
 function parseDataBr(data: string): Date | null {
@@ -99,7 +129,8 @@ interface ColaboradorSeed {
   registro: string;
   cargo: string;
   role: 'GERENTE' | 'FUNCIONARIO';
-  senha: string;
+  /** Nome da variavel de ambiente que guarda a senha — nunca a senha em si. */
+  senhaEnv: keyof typeof SENHAS_DEMO;
 }
 
 const COLABORADORES_SEED: ColaboradorSeed[] = [
@@ -112,7 +143,7 @@ const COLABORADORES_SEED: ColaboradorSeed[] = [
     registro: 'FRD-GER-001',
     cargo: 'Gerente Comercial',
     role: 'GERENTE',
-    senha: 'GerenteFord@2026',
+    senhaEnv: 'SEED_GERENTE_SENHA',
   },
   {
     nome: 'Patricia Oliveira',
@@ -123,13 +154,13 @@ const COLABORADORES_SEED: ColaboradorSeed[] = [
     registro: 'FRD-FUN-001',
     cargo: 'Consultora de Vendas',
     role: 'FUNCIONARIO',
-    senha: 'FuncFord@2026',
+    senhaEnv: 'SEED_FUNCIONARIO_SENHA',
   },
 ];
 
 async function seedColaboradores(): Promise<void> {
   for (const c of COLABORADORES_SEED) {
-    const senhaHash = await hashSenha(c.senha);
+    const senhaHash = await hashSenha(senhaDoAmbiente(c.senhaEnv));
     await prisma.colaborador.upsert({
       where: { email: c.email },
       update: {},
@@ -147,7 +178,14 @@ async function seedColaboradores(): Promise<void> {
       },
     });
   }
-  log('AUTH', `${COLABORADORES_SEED.length} colaboradores de exemplo`);
+  // O log dizia "2" (so COLABORADORES_SEED) e esquecia o ADMIN criado em
+  // seedAdmin(); um stakeholder leu isso como "o sistema tem 2 operadores".
+  // Contar no banco nao deixa o numero divergir de novo.
+  const total = await prisma.colaborador.count();
+  log(
+    'AUTH',
+    `${COLABORADORES_SEED.length} colaboradores de exemplo (${total} no total, incluindo o ADMIN)`,
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -45,18 +46,23 @@ export class UpdateClienteDto {
   @IsEnum(ClienteStatus)
   status?: ClienteStatus;
 
-  @ApiPropertyOptional()
+  // ponytail: derivados corrigiveis por PATCH com teto. O certo e calcular a
+  // partir dos contratos/veiculos do cliente; so que hoje Financiamento nao tem
+  // relacao com Cliente (liga por nome), entao nao da para derivar no servidor.
+  @ApiPropertyOptional({ maximum: 1000 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(1000)
   veiculosCount?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maximum: 1_000_000_000 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(1_000_000_000)
   ltv?: number;
 
   @ApiPropertyOptional()

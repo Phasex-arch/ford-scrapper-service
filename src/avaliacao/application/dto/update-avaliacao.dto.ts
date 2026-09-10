@@ -9,10 +9,12 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { SanitizeFreeText } from '../../../common/sanitizers/sanitize-free-text.decorator.js';
 
 export class UpdateAvaliacaoDto {
   @ApiPropertyOptional()
   @IsOptional()
+  @SanitizeFreeText(120)
   @IsString()
   @MinLength(3)
   @MaxLength(120)
@@ -34,6 +36,7 @@ export class UpdateAvaliacaoDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @SanitizeFreeText(2000)
   @IsString()
   @MinLength(5)
   @MaxLength(2000)
@@ -41,6 +44,7 @@ export class UpdateAvaliacaoDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @SanitizeFreeText(500)
   @IsString()
   @MaxLength(500)
   detalhe?: string;

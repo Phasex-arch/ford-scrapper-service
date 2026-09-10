@@ -13,8 +13,14 @@ describe('PublicLeadService', () => {
     mensagem: 'Quero uma proposta',
   };
 
-  function setup(fetchMock: jest.Mock) {
-    const repository = { create: jest.fn().mockResolvedValue({ id: 'lead-id' }) };
+  /** Tipos explícitos: `jest.fn()` sem genérico infere parâmetros `never` sob
+   *  @jest/globals, e aí `mockResolvedValue` não compila. */
+  type FetchMock = jest.Mock<() => Promise<unknown>>;
+
+  function setup(fetchMock: FetchMock) {
+    const repository = {
+      create: jest.fn<() => Promise<{ id: string }>>().mockResolvedValue({ id: 'lead-id' }),
+    };
     const config = {
       get: jest.fn((key: string) =>
         ({
@@ -32,10 +38,10 @@ describe('PublicLeadService', () => {
   }
 
   it('persists the lead and sends the Resend notification', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
+    const fetchMock = jest.fn<() => Promise<unknown>>().mockResolvedValue({
       ok: true,
       status: 200,
-      json: jest.fn().mockResolvedValue({ id: 'email-id' }),
+      json: jest.fn<() => Promise<unknown>>().mockResolvedValue({ id: 'email-id' }),
     });
     const { service, repository } = setup(fetchMock);
 
@@ -61,10 +67,10 @@ describe('PublicLeadService', () => {
   });
 
   it('returns an explicit unavailable error when Resend fails', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
+    const fetchMock = jest.fn<() => Promise<unknown>>().mockResolvedValue({
       ok: false,
       status: 500,
-      json: jest.fn().mockResolvedValue({ message: 'provider error' }),
+      json: jest.fn<() => Promise<unknown>>().mockResolvedValue({ message: 'provider error' }),
     });
     const { service } = setup(fetchMock);
 

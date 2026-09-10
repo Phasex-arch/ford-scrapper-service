@@ -16,7 +16,6 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -24,12 +23,10 @@ import { Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { MetaService } from '../application/meta.service.js';
 import { CreateMetaDto } from '../application/dto/create-meta.dto.js';
+import { ListMetaQueryDto } from '../application/dto/list-meta-query.dto.js';
 import { UpdateMetaDto } from '../application/dto/update-meta.dto.js';
 
 @ApiTags('Metas')
@@ -43,21 +40,15 @@ export class MetaController {
   @Get()
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiOperation({ summary: 'Listar metas' })
-  @ApiQuery({ name: 'periodo', required: false })
-  @ApiQuery({ name: 'indicador', required: false })
   @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('periodo') periodo?: string,
-    @Query('indicador') indicador?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  async list(@Query() query: ListMetaQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      periodo,
-      indicador,
+      periodo: query.periodo,
+      indicador: query.indicador,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),

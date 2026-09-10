@@ -9,9 +9,11 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { SanitizeFreeText } from '../../../common/sanitizers/sanitize-free-text.decorator.js';
 
 export class CreateAvaliacaoDto {
   @ApiProperty({ example: 'Carlos Eduardo Mendes' })
+  @SanitizeFreeText(120)
   @IsString()
   @MinLength(3)
   @MaxLength(120)
@@ -30,6 +32,7 @@ export class CreateAvaliacaoDto {
   data!: string;
 
   @ApiProperty({ example: 'Excelente atendimento!' })
+  @SanitizeFreeText(2000)
   @IsString()
   @MinLength(5)
   @MaxLength(2000)
@@ -39,6 +42,7 @@ export class CreateAvaliacaoDto {
     example: 'Servico: Revisao 10.000 km - Veiculo: Bronco Sport 2024',
   })
   @IsOptional()
+  @SanitizeFreeText(500)
   @IsString()
   @MaxLength(500)
   detalhe?: string;

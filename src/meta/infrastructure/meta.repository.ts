@@ -36,7 +36,12 @@ export class MetaRepository {
     return this.prisma.meta.findUnique({ where: { codigo } });
   }
 
-  create(dto: CreateMetaDto) {
+  /** Total de registros — base da sequencia de `codigo` gerada no servidor. */
+  totalRegistros() {
+    return this.prisma.meta.count();
+  }
+
+  create(dto: CreateMetaDto & { codigo: string; atual: number }) {
     return this.prisma.meta.create({ data: dto });
   }
 

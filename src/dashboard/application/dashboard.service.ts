@@ -45,7 +45,12 @@ export class DashboardService {
       }),
       this.prisma.ordemServico.findMany({
         where: { createdAt: { gte: intervalo.inicio, lt: intervalo.fim } },
-        select: { valor: true, status: true },
+        select: {
+          valor: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       }),
       this.prisma.financiamento.findMany({
         where: { createdAt: { gte: intervalo.inicio, lt: intervalo.fim } },
@@ -70,11 +75,23 @@ export class DashboardService {
       }),
     ]);
 
-    const agendamentos = ordens.length;
+    // `agendamentos` sao as OS ainda agendadas (PREVISTO), nao o total de ordens
+    // do periodo: contar tudo inflava o numero e, por tabela, a conversao.
+    //
+    // ponytail: nao existe entidade Agendamento no schema (a agenda e so tela);
+    // OS em PREVISTO e o proxy mais proximo. Quando houver agendamento de fato,
+    // trocar a fonte aqui.
+    const agendamentos = ordens.filter((o) => o.status === 'PREVISTO').length;
+
+    // Receita = contratos de financiamento do periodo. As OS ficam de fora porque
+    // OrdemServico.valor e String no schema ("R$ 3.800"): nao e somavel nem
+    // auditavel. Corrigir exige migration (Decimal/Int em centavos).
     const receita = financiamentos.reduce((acc, f) => acc + (f.valor ?? 0), 0);
+
     const conversao = leads > 0 ? +((agendamentos / leads) * 100).toFixed(1) : 0;
     const nota = +(avaliacaoAgg._avg.nota ?? 0).toFixed(1);
     const estoque = estoqueAgg._sum.quantidade ?? 0;
+    const sla = this.slaMedioHoras(ordens);
 
     return {
       periodo,
@@ -87,7 +104,7 @@ export class DashboardService {
         agendamentos,
         receita,
         conversao,
-        sla: 2.3,
+        sla,
         nota,
         estoque,
       },
@@ -98,6 +115,27 @@ export class DashboardService {
       },
       geradoEm: new Date().toISOString(),
     };
+  }
+
+  /**
+   * SLA medio em horas: tempo de abertura ate a conclusao das OS concluidas no
+   * periodo. Sem OS concluida, 0 — a tela mostra "0.0h" em vez de um numero
+   * inventado (antes era a constante 2.3, que nunca refletiu dado nenhum).
+   *
+   * ponytail: o schema nao tem `concluidoEm`, entao o fim e `updatedAt` (ultimo
+   * toque na OS). Para SLA contratual, adicionar a coluna e usar ela aqui.
+   */
+  private slaMedioHoras(
+    ordens: Array<{ status: string; createdAt: Date; updatedAt: Date }>,
+  ): number {
+    const concluidas = ordens.filter((o) => o.status === 'CONCLUIDO');
+    if (concluidas.length === 0) return 0;
+    const horas = concluidas.reduce(
+      (acc, o) =>
+        acc + (o.updatedAt.getTime() - o.createdAt.getTime()) / 3_600_000,
+      0,
+    );
+    return +(horas / concluidas.length).toFixed(1);
   }
 
   private computeInterval(periodo: DashPeriod) {

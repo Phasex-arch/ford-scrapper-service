@@ -42,7 +42,12 @@ export class ServicoRepository {
     return this.prisma.ordemServico.findUnique({ where: { numero } });
   }
 
-  create(dto: CreateServicoDto) {
+  /** Total de registros — base da sequencia de `numero` gerada no servidor. */
+  totalRegistros() {
+    return this.prisma.ordemServico.count();
+  }
+
+  create(dto: CreateServicoDto & { numero: string }) {
     return this.prisma.ordemServico.create({ data: dto });
   }
 

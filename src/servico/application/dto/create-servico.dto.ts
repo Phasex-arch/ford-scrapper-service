@@ -12,11 +12,15 @@ import {
 } from '../../../../generated/prisma/enums.js';
 
 export class CreateServicoDto {
-  @ApiProperty({ example: '#4831' })
+  @ApiPropertyOptional({
+    example: '#4831',
+    description: 'Opcional: o servidor gera a sequencia quando ausente.',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(20)
-  numero!: string;
+  numero?: string;
 
   @ApiProperty({ example: 'Carlos Mendes' })
   @IsString()

@@ -1,14 +1,32 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { Vehicle } from '../../domain/vehicle.js';
 import { VehicleRepository } from '../../infrastructure/repositories/vehicle.repository.js';
-import type { CreateVehicleDto } from '../dto/create-vehicle.dto.js';
+import { CreateVehicleDto } from '../dto/create-vehicle.dto.js';
 import type { VehicleFilterDto } from '../dto/vehicle-filter.dto.js';
 
 @Injectable()
 export class VehicleService {
   constructor(private readonly vehicleRepository: VehicleRepository) {}
 
+  /**
+   * Unico ponto de escrita de veiculo, e o caminho de ingestao do scraper nao
+   * passa por controller — logo nao passa pelo ValidationPipe. A validacao do
+   * DTO e feita aqui para que dado derivado de LLM nao chegue cru ao banco.
+   */
   async save(dto: CreateVehicleDto): Promise<Vehicle> {
+    const erros = await validate(plainToInstance(CreateVehicleDto, dto), {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+    if (erros.length > 0) {
+      throw new BadRequestException(
+        `Veiculo invalido (${dto?.slug ?? 'sem slug'}): ${erros
+          .map((e) => e.property)
+          .join(', ')}`,
+      );
+    }
     return this.vehicleRepository.save(dto);
   }
 

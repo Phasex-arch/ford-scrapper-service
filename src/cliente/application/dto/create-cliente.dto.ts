@@ -1,25 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsEmail,
   IsEnum,
-  IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
-  Min,
   MinLength,
 } from 'class-validator';
 import { ClienteStatus } from '../../../../generated/prisma/enums.js';
 
 export class CreateClienteDto {
-  @ApiProperty({ example: 'C001' })
+  @ApiPropertyOptional({
+    example: 'C001',
+    description: 'Opcional: o servidor gera a sequencia quando ausente.',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(20)
-  codigo!: string;
+  codigo?: string;
 
   @ApiProperty({ example: 'Carlos Eduardo Mendes' })
   @IsString()
@@ -48,19 +48,9 @@ export class CreateClienteDto {
   @IsEnum(ClienteStatus)
   status?: ClienteStatus;
 
-  @ApiPropertyOptional({ default: 0 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  veiculosCount?: number;
-
-  @ApiPropertyOptional({ default: 0 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  ltv?: number;
+  // `veiculosCount` e `ltv` sao metricas derivadas: nascem em 0 e sao corrigidas
+  // por PATCH (ADMIN/GERENTE, auditado). Aceitar na criacao permitiria ao cliente
+  // declarar o proprio LTV.
 
   @ApiProperty({ example: 'CM', maxLength: 4 })
   @IsString()

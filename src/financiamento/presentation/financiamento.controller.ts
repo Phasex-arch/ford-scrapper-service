@@ -16,23 +16,17 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import {
-  FinanciamentoStatus,
-  Role,
-} from '../../../generated/prisma/enums.js';
+import { Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { FinanciamentoService } from '../application/financiamento.service.js';
 import { CreateFinanciamentoDto } from '../application/dto/create-financiamento.dto.js';
+import { ListFinanciamentoQueryDto } from '../application/dto/list-financiamento-query.dto.js';
 import { UpdateFinanciamentoDto } from '../application/dto/update-financiamento.dto.js';
 
 @ApiTags('Financiamentos')
@@ -46,21 +40,15 @@ export class FinanciamentoController {
   @Get()
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiOperation({ summary: 'Listar financiamentos' })
-  @ApiQuery({ name: 'status', required: false, enum: FinanciamentoStatus })
-  @ApiQuery({ name: 'search', required: false })
   @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('status') status?: FinanciamentoStatus,
-    @Query('search') search?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  async list(@Query() query: ListFinanciamentoQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      status,
-      search,
+      status: query.status,
+      search: query.search,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),

@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { json, urlencoded } from 'express';
+import type { Express, Request, Response } from 'express';
 
 import { AppModule } from './app.module.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
@@ -15,15 +16,27 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
  * - ValidationPipe global com whitelist + forbidNonWhitelisted (slide 5).
  * - HttpExceptionFilter padronizado evita vazar stack traces (slide 9).
  * - `trust proxy` repassa o IP real do cliente para audit/logging.
+ * - Swagger UI apenas fora de produção (P0-5): `SwaggerModule.setup` monta no
+ *   Express cru, sem passar por `JwtAuthGuard`/`ThrottlerGuard`, então em
+ *   produção a documentação não é montada de forma alguma.
  */
 async function bootstrap() {
+  const isProd = process.env.NODE_ENV === 'production';
+  // P0-5: em produção a documentação não é publicada.
+  const docsHabilitado = !isProd;
+
   const app = await NestFactory.create(AppModule, { bodyParser: true });
   const logger = new Logger('Bootstrap');
 
-  // Redirecionamento amigável de / e /api para a documentação Swagger
-  const expressApp = app.getHttpAdapter().getInstance();
-  expressApp.get(['/', '/api'], (_req: any, res: any) => res.redirect('/api/docs'));
-  expressApp.get('/favicon.ico', (_req: any, res: any) => res.status(204).end());
+  // Redirecionamento amigável de / e /api. Sem Swagger, o destino é o health.
+  const expressApp = app.getHttpAdapter().getInstance() as Express;
+  const destinoRaiz = docsHabilitado ? '/api/docs' : '/api/health';
+  expressApp.get(['/', '/api'], (_req: Request, res: Response) =>
+    res.redirect(destinoRaiz),
+  );
+  expressApp.get('/favicon.ico', (_req: Request, res: Response) =>
+    res.status(204).end(),
+  );
 
   app.setGlobalPrefix('api');
 
@@ -47,9 +60,7 @@ async function bootstrap() {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  const isProd = process.env.NODE_ENV === 'production';
-  const isWildcardOnly =
-    rawOrigins.length === 1 && rawOrigins[0] === '*';
+  const isWildcardOnly = rawOrigins.length === 1 && rawOrigins[0] === '*';
   if (isProd && isWildcardOnly) {
     throw new Error(
       'CORS_ORIGINS="*" é proibido em produção. Defina uma lista de origens confiáveis.',
@@ -118,15 +129,21 @@ async function bootstrap() {
     .addTag('Scrapper', 'Disparo manual do scraping (autenticado)')
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  if (docsHabilitado) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`Application running on http://localhost:${port}`);
-  logger.log(`Swagger docs available at http://localhost:${port}/api/docs`);
+  logger.log(
+    docsHabilitado
+      ? `Swagger docs available at http://localhost:${port}/api/docs`
+      : 'Swagger docs desabilitado (NODE_ENV=production)',
+  );
 }
 
 void bootstrap();

@@ -38,7 +38,12 @@ export class ClienteRepository {
     return this.prisma.cliente.findUnique({ where: { codigo } });
   }
 
-  create(dto: CreateClienteDto) {
+  /** Total de registros — base da sequencia de `codigo` gerada no servidor. */
+  totalRegistros() {
+    return this.prisma.cliente.count();
+  }
+
+  create(dto: CreateClienteDto & { codigo: string }) {
     return this.prisma.cliente.create({
       data: {
         ...dto,

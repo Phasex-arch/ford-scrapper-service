@@ -103,8 +103,17 @@ export class ColaboradorRepository {
     });
   }
 
+  countActiveAdmins(): Promise<number> {
+    return this.prisma.colaborador.count({
+      where: { role: 'ADMIN', ativo: true },
+    });
+  }
+
   private buildWhere(filter: ColaboradorListFilter) {
-    const where: Record<string, unknown> = {};
+    // A7: a listagem so mostra gente ativa por padrao — colaborador desativado
+    // e soft delete, nao deve reaparecer na equipe. `?ativo=false` ainda pede
+    // explicitamente os inativos.
+    const where: Record<string, unknown> = { ativo: true };
     if (typeof filter.ativo === 'boolean') where.ativo = filter.ativo;
     if (filter.role) where.role = filter.role;
     if (filter.search && filter.search.trim().length > 0) {

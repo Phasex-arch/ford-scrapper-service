@@ -1,12 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -14,6 +16,12 @@ import {
   CondicaoVeiculo,
   SegmentoVeiculo,
 } from '../../../../generated/prisma/enums.js';
+import {
+  EstoqueStatus,
+  OPCIONAIS_MAX_ITENS,
+  OPCIONAIS_MAX_TAMANHO,
+  PRECO_MAXIMO,
+} from './create-estoque.dto.js';
 
 export class UpdateEstoqueDto {
   @ApiPropertyOptional()
@@ -51,17 +59,17 @@ export class UpdateEstoqueDto {
   @IsEnum(CondicaoVeiculo)
   condicao?: CondicaoVeiculo;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ enum: EstoqueStatus })
   @IsOptional()
-  @IsString()
-  @MaxLength(40)
-  status?: string;
+  @IsEnum(EstoqueStatus)
+  status?: EstoqueStatus;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maximum: PRECO_MAXIMO })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(PRECO_MAXIMO)
   preco?: number;
 
   @ApiPropertyOptional({ enum: SegmentoVeiculo })
@@ -81,11 +89,12 @@ export class UpdateEstoqueDto {
   @MaxLength(500)
   imagem?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maximum: 10_000 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(10_000)
   quantidade?: number;
 
   @ApiPropertyOptional()
@@ -94,9 +103,11 @@ export class UpdateEstoqueDto {
   @MaxLength(20)
   km?: string;
 
-  @ApiPropertyOptional({ type: [String] })
+  @ApiPropertyOptional({ type: [String], maxItems: OPCIONAIS_MAX_ITENS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(OPCIONAIS_MAX_ITENS)
   @IsString({ each: true })
+  @MaxLength(OPCIONAIS_MAX_TAMANHO, { each: true })
   opcionais?: string[];
 }

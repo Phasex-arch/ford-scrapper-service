@@ -20,11 +20,14 @@ interface SecurityEvent {
 
 const FAILED_LOGIN_THRESHOLD = 5;
 const FAILED_LOGIN_WINDOW_MS = 5 * 60 * 1000;
+/** Teto de chaves rastreadas: o email vem de corpo nao autenticado. */
+const MAX_CHAVES_RASTREADAS = 10_000;
 
 @Injectable()
 export class SecurityEventLogger {
   private readonly logger = new Logger('SecurityEvent');
   private readonly failedLogins = new Map<string, number[]>();
+  private ultimaVarredura = Date.now();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -68,9 +71,39 @@ export class SecurityEventLogger {
     }
   }
 
+  /**
+   * As tentativas eram podadas dentro de cada chave, mas chave nenhuma saia do
+   * mapa — e a chave inclui um email arbitrario de requisicao anonima, ou seja,
+   * crescimento sem limite. Varre no maximo uma vez por janela.
+   */
+  private varrerExpirados(now: number): void {
+    if (
+      now - this.ultimaVarredura < FAILED_LOGIN_WINDOW_MS &&
+      this.failedLogins.size < MAX_CHAVES_RASTREADAS
+    ) {
+      return;
+    }
+    this.ultimaVarredura = now;
+    for (const [chave, tentativas] of this.failedLogins) {
+      const ultima = tentativas[tentativas.length - 1];
+      if (ultima === undefined || now - ultima >= FAILED_LOGIN_WINDOW_MS) {
+        this.failedLogins.delete(chave);
+      }
+    }
+  }
+
   private trackFailedLogin(email: string, ip?: string): void {
     const key = `${email}::${ip ?? 'unknown'}`;
     const now = Date.now();
+    this.varrerExpirados(now);
+    // Mapa cheio de chaves vivas: nao cria mais nenhuma. A varredura acima
+    // libera o espaco assim que a janela dessas tentativas vencer.
+    if (
+      this.failedLogins.size >= MAX_CHAVES_RASTREADAS &&
+      !this.failedLogins.has(key)
+    ) {
+      return;
+    }
     const attempts = (this.failedLogins.get(key) ?? []).filter(
       (t) => now - t < FAILED_LOGIN_WINDOW_MS,
     );

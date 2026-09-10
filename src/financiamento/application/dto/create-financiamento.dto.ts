@@ -6,18 +6,28 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
 import { FinanciamentoStatus } from '../../../../generated/prisma/enums.js';
 
+/** Tetos do contrato: R$ 1 bi de valor, 120 meses de prazo, 100% de taxa mensal. */
+export const FIN_VALOR_MAXIMO = 1_000_000_000;
+export const FIN_PRAZO_MAXIMO = 120;
+export const FIN_TAXA_MAXIMA = 100;
+
 export class CreateFinanciamentoDto {
-  @ApiProperty({ example: 'F001' })
+  @ApiPropertyOptional({
+    example: 'F001',
+    description: 'Opcional: o servidor gera a sequencia quando ausente.',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(20)
-  codigo!: string;
+  codigo?: string;
 
   @ApiProperty({ example: 'Carlos Eduardo Mendes' })
   @IsString()
@@ -34,34 +44,40 @@ export class CreateFinanciamentoDto {
   @MaxLength(120)
   veiculo!: string;
 
-  @ApiProperty({ example: 189900 })
+  @ApiProperty({ example: 189900, maximum: FIN_VALOR_MAXIMO })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(FIN_VALOR_MAXIMO)
   valor!: number;
 
-  @ApiProperty({ example: 38000 })
+  @ApiProperty({ example: 38000, maximum: FIN_VALOR_MAXIMO })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(FIN_VALOR_MAXIMO)
   entrada!: number;
 
-  @ApiProperty({ example: 48 })
+  @ApiProperty({ example: 48, maximum: FIN_PRAZO_MAXIMO })
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(FIN_PRAZO_MAXIMO)
   prazo!: number;
 
-  @ApiProperty({ example: 1.49 })
+  @ApiProperty({ example: 1.49, maximum: FIN_TAXA_MAXIMA })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(FIN_TAXA_MAXIMA)
   taxa!: number;
 
-  @ApiProperty({ example: 3842 })
+  /** Conferida no servidor contra a tabela Price — ver FinanciamentoService. */
+  @ApiProperty({ example: 3842, maximum: FIN_VALOR_MAXIMO })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(FIN_VALOR_MAXIMO)
   parcela!: number;
 
   @ApiPropertyOptional({

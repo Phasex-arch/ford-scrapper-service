@@ -16,20 +16,17 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LeadUrgencia, Role } from '../../../generated/prisma/enums.js';
+import { Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { LeadService } from '../application/lead.service.js';
 import { CreateLeadDto } from '../application/dto/create-lead.dto.js';
+import { ListLeadQueryDto } from '../application/dto/list-lead-query.dto.js';
 import { UpdateLeadDto } from '../application/dto/update-lead.dto.js';
 
 @ApiTags('Leads')
@@ -43,21 +40,15 @@ export class LeadController {
   @Get()
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiOperation({ summary: 'Listar leads' })
-  @ApiQuery({ name: 'urgencia', required: false, enum: LeadUrgencia })
-  @ApiQuery({ name: 'search', required: false })
   @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('urgencia') urgencia?: LeadUrgencia,
-    @Query('search') search?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  async list(@Query() query: ListLeadQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      urgencia,
-      search,
+      urgencia: query.urgencia,
+      search: query.search,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),

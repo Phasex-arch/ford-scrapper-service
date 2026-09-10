@@ -1,12 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -16,12 +18,34 @@ import {
   SegmentoVeiculo,
 } from '../../../../generated/prisma/enums.js';
 
+/**
+ * Estados do item de estoque. A coluna no banco e String (legado), mas a API so
+ * aceita a lista fechada — todo outro status do sistema e enum, e string livre
+ * aqui deixava o campo sem contrato para o frontend.
+ */
+export enum EstoqueStatus {
+  DISPONIVEL = 'Disponivel',
+  RESERVADO = 'Reservado',
+  VENDIDO = 'Vendido',
+}
+
+/** Teto de preco: R$ 1 bilhao. Acima disso e erro de digitacao ou ataque. */
+export const PRECO_MAXIMO = 1_000_000_000;
+
+/** Teto de itens e de tamanho por item da lista de opcionais. */
+export const OPCIONAIS_MAX_ITENS = 40;
+export const OPCIONAIS_MAX_TAMANHO = 80;
+
 export class CreateEstoqueDto {
-  @ApiProperty({ example: 'E001' })
+  @ApiPropertyOptional({
+    example: 'E001',
+    description: 'Opcional: o servidor gera a sequencia quando ausente.',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(20)
-  codigo!: string;
+  codigo?: string;
 
   @ApiProperty({ example: 'Ford Bronco Sport' })
   @IsString()
@@ -52,16 +76,16 @@ export class CreateEstoqueDto {
   @IsEnum(CondicaoVeiculo)
   condicao!: CondicaoVeiculo;
 
-  @ApiPropertyOptional({ default: 'Disponivel' })
+  @ApiPropertyOptional({ enum: EstoqueStatus, default: EstoqueStatus.DISPONIVEL })
   @IsOptional()
-  @IsString()
-  @MaxLength(40)
-  status?: string;
+  @IsEnum(EstoqueStatus)
+  status?: EstoqueStatus;
 
-  @ApiProperty({ example: 209900 })
+  @ApiProperty({ example: 209900, maximum: PRECO_MAXIMO })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(PRECO_MAXIMO)
   preco!: number;
 
   @ApiProperty({ enum: SegmentoVeiculo })
@@ -79,11 +103,12 @@ export class CreateEstoqueDto {
   @MaxLength(500)
   imagem?: string;
 
-  @ApiPropertyOptional({ default: 1 })
+  @ApiPropertyOptional({ default: 1, maximum: 10_000 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(10_000)
   quantidade?: number;
 
   @ApiPropertyOptional()
@@ -92,9 +117,11 @@ export class CreateEstoqueDto {
   @MaxLength(20)
   km?: string;
 
-  @ApiPropertyOptional({ type: [String] })
+  @ApiPropertyOptional({ type: [String], maxItems: OPCIONAIS_MAX_ITENS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(OPCIONAIS_MAX_ITENS)
   @IsString({ each: true })
+  @MaxLength(OPCIONAIS_MAX_TAMANHO, { each: true })
   opcionais?: string[];
 }

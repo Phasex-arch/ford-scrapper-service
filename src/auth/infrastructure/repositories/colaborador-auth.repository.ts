@@ -22,8 +22,15 @@ export class ColaboradorAuthRepository {
     return this.prisma.colaborador.findUnique({ where: { email } });
   }
 
+  /**
+   * Usado pelo `JwtStrategy` em toda requisicao autenticada: `select` enxuto,
+   * sem o hash da senha.
+   */
   findById(id: string) {
-    return this.prisma.colaborador.findUnique({ where: { id } });
+    return this.prisma.colaborador.findUnique({
+      where: { id },
+      select: { id: true, email: true, nome: true, role: true, ativo: true },
+    });
   }
 
   create(data: CreateColaboradorAuthData) {
@@ -40,9 +47,5 @@ export class ColaboradorAuthRepository {
         senha: data.senhaHash,
       },
     });
-  }
-
-  countAdmins(): Promise<number> {
-    return this.prisma.colaborador.count({ where: { role: 'ADMIN' } });
   }
 }

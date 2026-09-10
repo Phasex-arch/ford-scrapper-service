@@ -9,10 +9,12 @@ import {
   Min,
 } from 'class-validator';
 import { LeadUrgencia } from '../../../../generated/prisma/enums.js';
+import { SanitizeFreeText } from '../../../common/sanitizers/sanitize-free-text.decorator.js';
 
 export class UpdateLeadDto {
   @ApiPropertyOptional()
   @IsOptional()
+  @SanitizeFreeText(120)
   @IsString()
   @MaxLength(120)
   clienteNome?: string;
@@ -25,12 +27,14 @@ export class UpdateLeadDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @SanitizeFreeText(120)
   @IsString()
   @MaxLength(120)
   veiculoInteresse?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
+  @SanitizeFreeText(500)
   @IsString()
   @MaxLength(500)
   necessidade?: string;

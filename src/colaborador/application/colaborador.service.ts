@@ -1,10 +1,12 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import argon2 from 'argon2';
 import { ColaboradorRepository } from '../infrastructure/repositories/colaborador.repository.js';
+import type { AuthenticatedUser } from '../../auth/domain/authenticated-user.js';
 import type { Role } from '../../../generated/prisma/enums.js';
 import type { CreateColaboradorDto } from './dto/create-colaborador.dto.js';
 import type { UpdateColaboradorDto } from './dto/update-colaborador.dto.js';
@@ -47,8 +49,7 @@ export class ColaboradorService {
 
     if (existingEmail) throw new ConflictException('Email ja cadastrado');
     if (existingCpf) throw new ConflictException('CPF ja cadastrado');
-    if (existingRegistro)
-      throw new ConflictException('Registro ja cadastrado');
+    if (existingRegistro) throw new ConflictException('Registro ja cadastrado');
 
     const senhaHash = await argon2.hash(dto.senha, {
       type: argon2.argon2id,
@@ -71,8 +72,45 @@ export class ColaboradorService {
     });
   }
 
-  async update(id: string, dto: UpdateColaboradorDto) {
-    await this.findById(id);
+  /**
+   * P0-3: o PATCH aceitava `role`, `senha` e `ativo` de qualquer ADMIN ou
+   * GERENTE, sem nenhuma checagem de autorizacao. Um GERENTE se promovia a
+   * ADMIN em uma requisicao, ou tomava a conta de um ADMIN trocando a senha.
+   *
+   * P1-5: ninguem — nem o proprio ADMIN — pode deixar o sistema sem ADMIN
+   * ativo, porque `POST /auth/register` exige ADMIN e nao haveria volta.
+   */
+  async update(id: string, dto: UpdateColaboradorDto, ator: AuthenticatedUser) {
+    const alvo = await this.findById(id);
+    const atorEhAdmin = ator.role === 'ADMIN';
+
+    if (!atorEhAdmin) {
+      if (alvo.role === 'ADMIN') {
+        throw new ForbiddenException(
+          'Apenas um ADMIN pode alterar outro ADMIN',
+        );
+      }
+      if (dto.role !== undefined) {
+        throw new ForbiddenException('Apenas um ADMIN pode alterar papeis');
+      }
+      if (dto.ativo !== undefined) {
+        throw new ForbiddenException(
+          'Apenas um ADMIN pode ativar ou desativar colaboradores',
+        );
+      }
+      // Trocar a propria senha continua liberado; a de outra pessoa, nao.
+      if (dto.senha !== undefined && alvo.id !== ator.id) {
+        throw new ForbiddenException(
+          'Apenas um ADMIN pode redefinir a senha de outro colaborador',
+        );
+      }
+    }
+
+    const perdendoAdmin =
+      alvo.role === 'ADMIN' &&
+      alvo.ativo &&
+      (dto.ativo === false || (dto.role !== undefined && dto.role !== 'ADMIN'));
+    if (perdendoAdmin) await this.assertNaoEhUltimoAdmin();
 
     if (dto.email) {
       const existing = await this.repo.findByEmail(dto.email);
@@ -102,7 +140,19 @@ export class ColaboradorService {
   }
 
   async delete(id: string) {
-    await this.findById(id);
+    const alvo = await this.findById(id);
+    if (alvo.role === 'ADMIN' && alvo.ativo) {
+      await this.assertNaoEhUltimoAdmin();
+    }
     return this.repo.softDelete(id);
+  }
+
+  /** P1-5: desativar/rebaixar o ultimo ADMIN ativo trancaria todo mundo fora. */
+  private async assertNaoEhUltimoAdmin(): Promise<void> {
+    if ((await this.repo.countActiveAdmins()) <= 1) {
+      throw new ConflictException(
+        'O sistema precisa de ao menos um ADMIN ativo',
+      );
+    }
   }
 }

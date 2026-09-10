@@ -37,7 +37,12 @@ export class FinanciamentoRepository {
     return this.prisma.financiamento.findUnique({ where: { codigo } });
   }
 
-  create(dto: CreateFinanciamentoDto) {
+  /** Total de registros — base da sequencia de `codigo` gerada no servidor. */
+  totalRegistros() {
+    return this.prisma.financiamento.count();
+  }
+
+  create(dto: CreateFinanciamentoDto & { codigo: string }) {
     return this.prisma.financiamento.create({ data: dto });
   }
 

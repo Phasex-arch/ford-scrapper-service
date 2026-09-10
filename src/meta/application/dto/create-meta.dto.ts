@@ -5,16 +5,25 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
+/** Teto dos valores de meta — acima disso e erro de digitacao ou abuso. */
+export const META_VALOR_MAXIMO = 1_000_000_000;
+
 export class CreateMetaDto {
-  @ApiProperty({ example: 'M001' })
+  @ApiPropertyOptional({
+    example: 'M001',
+    description: 'Opcional: o servidor gera a sequencia quando ausente.',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(20)
-  codigo!: string;
+  codigo?: string;
 
   @ApiProperty({ example: 'Vendas Mensais' })
   @IsString()
@@ -31,14 +40,27 @@ export class CreateMetaDto {
   @MaxLength(40)
   indicador!: string;
 
-  @ApiProperty({ example: 22 })
+  /**
+   * Realizado da meta. Campo derivado: aceito no corpo por compatibilidade com
+   * os clientes existentes, mas IGNORADO — toda meta nasce com `atual` 0. Sem
+   * isso, qualquer um com metas:write criava uma meta ja batida.
+   */
+  @ApiPropertyOptional({
+    readOnly: true,
+    description: 'Ignorado na criacao: o realizado nasce em 0.',
+  })
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  atual!: number;
+  @Min(0)
+  @Max(META_VALOR_MAXIMO)
+  atual?: number;
 
-  @ApiProperty({ example: 28 })
+  @ApiProperty({ example: 28, minimum: 0, maximum: META_VALOR_MAXIMO })
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(META_VALOR_MAXIMO)
   alvo!: number;
 
   @ApiProperty({ example: 'un.' })

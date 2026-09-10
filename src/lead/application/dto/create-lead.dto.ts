@@ -10,6 +10,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { LeadUrgencia } from '../../../../generated/prisma/enums.js';
+import { SanitizeFreeText } from '../../../common/sanitizers/sanitize-free-text.decorator.js';
 
 export class CreateLeadDto {
   @ApiProperty({ example: 'L001' })
@@ -19,6 +20,7 @@ export class CreateLeadDto {
   codigo!: string;
 
   @ApiProperty({ example: 'Carlos Silva' })
+  @SanitizeFreeText(120)
   @IsString()
   @MaxLength(120)
   clienteNome!: string;
@@ -29,11 +31,13 @@ export class CreateLeadDto {
   iniciais!: string;
 
   @ApiProperty({ example: 'Ford Ranger Storm 2026' })
+  @SanitizeFreeText(120)
   @IsString()
   @MaxLength(120)
   veiculoInteresse!: string;
 
   @ApiProperty({ example: 'Upgrade de picape' })
+  @SanitizeFreeText(500)
   @IsString()
   @MaxLength(500)
   necessidade!: string;
