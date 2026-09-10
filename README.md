@@ -158,6 +158,7 @@ Sobe PostgreSQL + API automaticamente.
 | **Dashboard** | GET | `/dashboard` | JWT | Métricas consolidadas (vendas, leads, oficina) |
 | **Colaboradores** | GET/POST | `/colaboradores` | ADMIN/GERENTE | Gestão de equipe e perfis de acesso |
 | **Health** | GET | `/health` | Pública | Health check do serviço e conexão com banco |
+| **Contato** | POST | `/public/leads` | Pública | Cria lead do portal e envia notificação via Resend |
 
 ### Filtros disponíveis em `/vehicles`
 
@@ -182,6 +183,20 @@ Sobe PostgreSQL + API automaticamente.
 ```
 GET /api/vehicles?categoria=Picape&combustivel=Diesel&sort=preco_asc&page=1&limit=5
 ```
+
+### Contato público e Resend
+
+Configure no ambiente do backend:
+
+```bash
+RESEND_API_KEY=re_xxxxxxxxx
+RESEND_FROM_EMAIL="Website Ford <contato@seudominio.com>"
+LEAD_NOTIFICATION_EMAIL=vendas@seudominio.com
+```
+
+O endpoint `POST /api/public/leads` aceita `nome`, `email`, `telefone`,
+`veiculoInteresse` e `mensagem`. A chave do Resend nunca deve ser enviada ao
+frontend.
 
 ---
 
