@@ -140,7 +140,7 @@ Sobe PostgreSQL + API automaticamente.
 | Módulo | Método | Endpoint | Proteção | Descrição |
 |--------|--------|----------|----------|-----------|
 | **Auth** | POST | `/auth/login` | Pública | Login com registro/email e senha |
-| **Auth** | POST | `/auth/register` | ADMIN | Cadastro de novos colaboradores |
+| **Colaboradores** | POST | `/colaboradores` | ADMIN | Cadastro de novos colaboradores |
 | **Auth** | GET | `/auth/me` | JWT | Dados do usuário autenticado |
 | **Veículos** | GET | `/vehicles` | Pública | Catálogo de veículos Ford (filtros, paginação, sort) |
 | **Veículos** | GET | `/vehicles/:id` | Pública | Detalhes do veículo por UUID ou slug |

@@ -93,7 +93,7 @@ flowchart LR
 | Auditoria de acesso negado | `RolesGuard` registra `access_denied` no `AuditLog` com IP, user-agent, rota e papel exigido.                                                                                                         |
 | Brute-force                | **(a)** `@Throttle({ limit: 5, ttl: 60_000 })` em `POST /auth/login` — corta na borda HTTP. **(b)** `SecurityEventLogger.trackFailedLogin` — buffer `email::ip`, janela 5 min, alerta na 5ª falha.   |
 | Mascaramento de CPF        | `toColaboradorResponse` aplica `maskCpf()` — CPF sai como `***.***.XXX-XX`. Nunca trafega em claro.                                                                                                    |
-| `/auth/register` protegido | Exige `@Roles(Role.ADMIN)` — só ADMIN cria colaboradores.                                                                                                                                             |
+| `/colaboradores` protegido | Exige `@Roles(Role.ADMIN)` — só ADMIN cria colaboradores.                                                                                                                                             |
 | Seed seguro                | `prisma/seed.ts` exige `ADMIN_SENHA` no ambiente; falha se ausente. Nenhum hash default commitado.                                                                                                     |
 | Cookies / CSRF             | API stateless (Bearer JWT). Sem cookies de sessão, sem vetor CSRF.                                                                                                                                     |
 
@@ -146,7 +146,7 @@ flowchart LR
 | Detecção de brute force  | `trackFailedLogin`: buffer `email::ip`, janela 5 min, alerta `brute_force_suspected` na 5ª falha.                                                                                 |
 | Severidade por status    | Nível do log (`info`/`warn`/`error`) segue o status HTTP.                                                                                                                          |
 | Métricas de latência     | `durationMs` em cada log — basta ingerir para histogramas P50/P95/P99.                                                                                                             |
-| Rotas sensíveis marcadas | `/auth/login` e `/auth/register` marcados com `sensitive: true` para que pipelines de log possam mascarar campos.                                                                   |
+| Rotas sensíveis marcadas | `/auth/login` e `/colaboradores` marcados com `sensitive: true` para que pipelines de log possam mascarar campos.                                                                   |
 
 ---
 
@@ -287,7 +287,7 @@ src/
 │  │  ├─ guards/{jwt-auth,roles}.guard.ts             # JwtAuthGuard global + RolesGuard por rota
 │  │  ├─ repositories/colaborador-auth.repository.ts  # Prisma + Colaborador
 │  │  └─ strategies/jwt.strategy.ts                   # passport-jwt
-│  └─ presentation/auth.controller.ts                 # POST /auth/login, /auth/register
+│  └─ presentation/auth.controller.ts                 # POST /auth/login
 ├─ common/
 │  ├─ common.module.ts                                # @Global — provê os blocos abaixo
 │  ├─ crypto/aes-gcm.service.ts                       # AES-256-GCM (IV aleatório + auth tag)
@@ -346,4 +346,3 @@ export class RetentionCron {
   }
 }
 ```
-

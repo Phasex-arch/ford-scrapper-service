@@ -16,6 +16,7 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -76,13 +77,19 @@ export class ColaboradorController {
     };
   }
 
-  @Get(':id')
+  @Get(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE)
-  @ApiOperation({ summary: 'Buscar colaborador por ID' })
+  @ApiOperation({ summary: 'Buscar colaborador por UUID' })
+  @ApiParam({
+    name: 'uuid',
+    description: 'UUID do colaborador',
+    example: '8d3e0b8a-4e38-4d1b-9f6a-123456789abc',
+    format: 'uuid',
+  })
   @ApiResponse({ status: 200, type: ColaboradorResponseDto })
   @ApiResponse({ status: 404, description: 'Nao encontrado' })
-  async findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    const c = await this.service.findById(id);
+  async findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    const c = await this.service.findById(uuid);
     return toColaboradorResponse(c);
   }
 
@@ -96,24 +103,36 @@ export class ColaboradorController {
     return toColaboradorResponse(c);
   }
 
-  @Patch(':id')
+  @Patch(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE)
   @ApiOperation({ summary: 'Atualizar colaborador' })
+  @ApiParam({
+    name: 'uuid',
+    description: 'UUID do colaborador',
+    example: '8d3e0b8a-4e38-4d1b-9f6a-123456789abc',
+    format: 'uuid',
+  })
   @ApiResponse({ status: 200, type: ColaboradorResponseDto })
   async update(
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateColaboradorDto,
   ) {
-    const c = await this.service.update(id, dto);
+    const c = await this.service.update(uuid, dto);
     return toColaboradorResponse(c);
   }
 
-  @Delete(':id')
+  @Delete(':uuid')
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Desativar colaborador (soft delete, ADMIN)' })
+  @ApiParam({
+    name: 'uuid',
+    description: 'UUID do colaborador',
+    example: '8d3e0b8a-4e38-4d1b-9f6a-123456789abc',
+    format: 'uuid',
+  })
   @ApiResponse({ status: 204 })
-  async remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    await this.service.delete(id);
+  async remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    await this.service.delete(uuid);
   }
 }

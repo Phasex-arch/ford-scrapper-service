@@ -235,25 +235,31 @@ export class VehicleController {
     };
   }
 
-  @Get(':id')
+  @Get(':identifier')
   @ApiOperation({ summary: 'Get a vehicle by UUID or slug' })
-  @ApiParam({ name: 'id', description: 'Vehicle UUID or slug' })
+  @ApiParam({
+    name: 'identifier',
+    description: 'Vehicle UUID or slug',
+    example: '8d3e0b8a-4e38-4d1b-9f6a-123456789abc',
+  })
   @ApiResponse({ status: 200, description: 'Vehicle details' })
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
-  async findOne(@Param('id') id: string) {
-    if (!UUID_RE.test(id) && !SLUG_RE.test(id)) {
-      throw new BadRequestException('id deve ser um UUID ou slug válido');
+  async findOne(@Param('identifier') identifier: string) {
+    if (!UUID_RE.test(identifier) && !SLUG_RE.test(identifier)) {
+      throw new BadRequestException(
+        'identifier deve ser um UUID ou slug válido',
+      );
     }
-    this.logger.log(`GET /vehicles/${id}`);
+    this.logger.log(`GET /vehicles/${identifier}`);
 
-    let vehicle = UUID_RE.test(id)
-      ? await this.vehicleService.findById(id)
+    let vehicle = UUID_RE.test(identifier)
+      ? await this.vehicleService.findById(identifier)
       : null;
     if (!vehicle) {
-      vehicle = await this.vehicleService.findBySlug(id);
+      vehicle = await this.vehicleService.findBySlug(identifier);
     }
     if (!vehicle) {
-      throw new NotFoundException(`Vehicle not found: ${id}`);
+      throw new NotFoundException(`Vehicle not found: ${identifier}`);
     }
 
     return mapVehicleToResponse(vehicle);

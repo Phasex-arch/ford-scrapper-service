@@ -2,7 +2,7 @@ import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 
-const SENSITIVE_PATHS = ['/auth/login', '/auth/register'];
+const SENSITIVE_PATHS = ['/auth/login', '/colaboradores'];
 
 @Injectable()
 export class LoggingMiddleware implements NestMiddleware {

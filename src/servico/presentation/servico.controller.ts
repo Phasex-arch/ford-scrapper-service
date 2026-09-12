@@ -79,10 +79,10 @@ export class ServicoController {
     };
   }
 
-  @Get(':id')
+  @Get(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.service.findById(id);
+  findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    return this.service.findById(uuid);
   }
 
   @Post()
@@ -91,19 +91,19 @@ export class ServicoController {
     return this.service.create(dto);
   }
 
-  @Patch(':id')
+  @Patch(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   update(
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateServicoDto,
   ) {
-    return this.service.update(id, dto);
+    return this.service.update(uuid, dto);
   }
 
-  @Delete(':id')
+  @Delete(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE)
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.service.delete(id);
+  remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    return this.service.delete(uuid);
   }
 }

@@ -72,10 +72,10 @@ export class AvaliacaoController {
   }
 
   @Public()
-  @Get(':id')
-  @ApiOperation({ summary: 'Buscar avaliacao por ID (publico)' })
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.service.findById(id);
+  @Get(':uuid')
+  @ApiOperation({ summary: 'Buscar avaliacao por UUID (publico)' })
+  findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    return this.service.findById(uuid);
   }
 
   @Public()
@@ -88,22 +88,22 @@ export class AvaliacaoController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiBearerAuth()
-  @Patch(':id')
+  @Patch(':uuid')
   @ApiOperation({ summary: 'Atualizar avaliacao (autenticado)' })
   update(
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateAvaliacaoDto,
   ) {
-    return this.service.update(id, dto);
+    return this.service.update(uuid, dto);
   }
 
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.GERENTE)
   @ApiBearerAuth()
-  @Delete(':id')
+  @Delete(':uuid')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remover avaliacao (ADMIN/GERENTE)' })
-  remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.service.delete(id);
+  remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    return this.service.delete(uuid);
   }
 }
