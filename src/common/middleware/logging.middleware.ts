@@ -36,12 +36,15 @@ export class LoggingMiddleware implements NestMiddleware {
         sensitive: SENSITIVE_PATHS.some((p) => originalUrl.includes(p)),
       };
 
+      // Passa o objeto direto (não mais JSON.stringify) — agora que o
+      // Logger do app é o pino (nestjs-pino), isso vira NDJSON estruturado
+      // de verdade em vez de uma string JSON dentro de outra linha de log.
       if (res.statusCode >= 500) {
-        this.logger.error(JSON.stringify(entry));
+        this.logger.error(entry);
       } else if (res.statusCode >= 400) {
-        this.logger.warn(JSON.stringify(entry));
+        this.logger.warn(entry);
       } else {
-        this.logger.log(JSON.stringify(entry));
+        this.logger.log(entry);
       }
     });
 

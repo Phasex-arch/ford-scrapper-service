@@ -1,6 +1,7 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import { json, urlencoded } from 'express';
 
@@ -18,8 +19,9 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
  * - Em produção, recusa subir com CORS_ORIGINS="*" ou JWT_SECRET fraco/placeholder.
  */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bodyParser: true });
-  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create(AppModule, { bodyParser: true, bufferLogs: true });
+  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
 
   // Redirecionamento amigável de / e /api para a documentação Swagger
   const expressApp = app.getHttpAdapter().getInstance();

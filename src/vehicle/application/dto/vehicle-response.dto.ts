@@ -31,6 +31,9 @@ export interface VehicleResponseItem {
   status: string;
   preco_inicial: number | null;
   moeda: string;
+  /** Aviso de qualidade da extração (ex.: ficha técnica não encontrada,
+   *  dados vieram de parse alternativo) — null quando a extração foi limpa. */
+  observacao: string | null;
   motorizacao: {
     descricao: string;
     combustivel: string;
@@ -70,6 +73,7 @@ export function mapVehicleToResponse(vehicle: Vehicle): VehicleResponseItem {
     status: vehicle.status,
     preco_inicial: vehicle.preco_inicial,
     moeda: vehicle.currency,
+    observacao: vehicle.observacao,
     motorizacao: {
       descricao: vehicle.motorizacao.descricao,
       combustivel: vehicle.motorizacao.combustivel,

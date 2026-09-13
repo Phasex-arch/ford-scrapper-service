@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
 
 import { ScrapperModule } from './scrapper/scrapper.module.js';
 import { VehicleModule } from './vehicle/vehicle.module.js';
@@ -32,6 +33,32 @@ import { AuditLogModule } from './audit-log/audit-log.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Logger real (pino, NDJSON) — antes a dependência estava instalada mas
+    // nunca conectada, e todo log saía pelo Logger padrão do Nest sem
+    // estrutura. autoLogging fica desligado porque o LoggingMiddleware já
+    // cobre o log de requisição/resposta com os campos que o projeto usa
+    // (requestId, sensitive); aqui o pino só vira o "motor" por trás de
+    // todo `Logger`/`this.logger.log(...)` do app, incluindo o middleware.
+    LoggerModule.forRoot({
+      pinoHttp: {
+        autoLogging: false,
+        level: process.env.LOG_LEVEL ?? 'info',
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'req.body.senha',
+            'req.body.senhaAtual',
+            'req.body.novaSenha',
+          ],
+          censor: '[REDACTED]',
+        },
+        transport:
+          process.env.NODE_ENV === 'production'
+            ? undefined
+            : { target: 'pino-pretty', options: { singleLine: true, colorize: true } },
+      },
+    }),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60_000, limit: 60 }],
     }),
