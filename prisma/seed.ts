@@ -387,12 +387,12 @@ async function seedFinanciamentos(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const METAS_SEED = [
-  { codigo: 'M001', titulo: 'Vendas Mensais',     periodo: 'Abril/2026', indicador: 'vendas',  atual: 22,      alvo: 28,      unidade: 'un.',   responsavel: 'Equipe Comercial',      lowerIsBetter: false },
-  { codigo: 'M002', titulo: 'Receita Mensal',     periodo: 'Abril/2026', indicador: 'receita', atual: 1248000, alvo: 1200000, unidade: 'R$',    responsavel: 'Toda a Concessionaria', lowerIsBetter: false },
-  { codigo: 'M003', titulo: 'NPS',                periodo: 'Abril/2026', indicador: 'nps',     atual: 72,      alvo: 70,      unidade: 'pts',   responsavel: 'Atendimento',           lowerIsBetter: false },
-  { codigo: 'M004', titulo: 'SLA Medio',          periodo: 'Abril/2026', indicador: 'sla',     atual: 2.3,     alvo: 4,       unidade: 'h',     responsavel: 'Equipe Tecnica',        lowerIsBetter: true  },
-  { codigo: 'M005', titulo: 'Leads Qualificados', periodo: 'Abril/2026', indicador: 'leads',   atual: 61,      alvo: 80,      unidade: 'leads', responsavel: 'Marketing',             lowerIsBetter: false },
-  { codigo: 'M006', titulo: 'Taxa de Conversao',  periodo: 'Abril/2026', indicador: 'conv',    atual: 34.2,    alvo: 32,      unidade: '%',     responsavel: 'Ricardo Costa',         lowerIsBetter: false },
+  { codigo: 'M001', titulo: 'Vendas Mensais',     periodo: 'Setembro/2026', indicador: 'vendas',  atual: 22,      alvo: 28,      unidade: 'un.',   responsavel: 'Equipe Comercial',      lowerIsBetter: false },
+  { codigo: 'M002', titulo: 'Receita Mensal',     periodo: 'Setembro/2026', indicador: 'receita', atual: 1248000, alvo: 1200000, unidade: 'R$',    responsavel: 'Toda a Concessionaria', lowerIsBetter: false },
+  { codigo: 'M003', titulo: 'NPS',                periodo: 'Setembro/2026', indicador: 'nps',     atual: 72,      alvo: 70,      unidade: 'pts',   responsavel: 'Atendimento',           lowerIsBetter: false },
+  { codigo: 'M004', titulo: 'SLA Medio',          periodo: 'Setembro/2026', indicador: 'sla',     atual: 2.3,     alvo: 4,       unidade: 'h',     responsavel: 'Equipe Tecnica',        lowerIsBetter: true  },
+  { codigo: 'M005', titulo: 'Leads Qualificados', periodo: 'Setembro/2026', indicador: 'leads',   atual: 61,      alvo: 80,      unidade: 'leads', responsavel: 'Marketing',             lowerIsBetter: false },
+  { codigo: 'M006', titulo: 'Taxa de Conversao',  periodo: 'Setembro/2026', indicador: 'conv',    atual: 34.2,    alvo: 32,      unidade: '%',     responsavel: 'Ricardo Costa',         lowerIsBetter: false },
 ] as const;
 
 async function seedMetas(): Promise<void> {
