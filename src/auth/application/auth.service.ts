@@ -4,9 +4,10 @@ import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import { ColaboradorAuthRepository } from '../infrastructure/repositories/colaborador-auth.repository.js';
 import { SecurityEventLogger } from '../../common/security/security-event.logger.js';
+import { ExchangeCodeService } from './exchange-code.service.js';
 import type { AuthResponseDto } from './dto/auth-response.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
-import type { JwtPayload } from '../domain/authenticated-user.js';
+import type { AuthenticatedUser, JwtPayload } from '../domain/authenticated-user.js';
 
 interface SecurityContext {
   ip?: string;
@@ -22,6 +23,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly securityLogger: SecurityEventLogger,
+    private readonly exchangeCodeService: ExchangeCodeService,
   ) {
     const raw = this.config.get<string>('JWT_EXPIRES_IN') ?? '8h';
     this.expiresInSeconds = this.parseExpiresIn(raw);
@@ -64,6 +66,36 @@ export class AuthService {
     });
 
     return this.buildAuthResponse(colaborador);
+  }
+
+  /**
+   * Gera um código de uso único (30s) pra ponte de sessão entre aplicações
+   * (portal -> dealership), em vez do JWT completo viajar no fragmento da
+   * URL. Chamado pelo próprio usuário já autenticado (JwtAuthGuard exige
+   * um token válido pra chegar aqui).
+   */
+  createExchangeCode(user: AuthenticatedUser): { code: string; expiresIn: number } {
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      nome: user.nome,
+    };
+    return { code: this.exchangeCodeService.create(payload), expiresIn: 30 };
+  }
+
+  /** Troca o código (uso único) pelo JWT real. Lança 401 se inválido/expirado/já usado. */
+  exchangeCode(code: string): AuthResponseDto {
+    const payload = this.exchangeCodeService.redeem(code);
+    if (!payload) {
+      throw new UnauthorizedException('Código de acesso inválido ou expirado');
+    }
+    return this.buildAuthResponse({
+      id: payload.sub,
+      email: payload.email,
+      nome: payload.nome,
+      role: payload.role,
+    });
   }
 
   private buildAuthResponse(colaborador: {

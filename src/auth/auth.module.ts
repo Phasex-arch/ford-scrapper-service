@@ -7,6 +7,7 @@ import { JwtStrategy } from './infrastructure/strategies/jwt.strategy.js';
 import { JwtAuthGuard } from './infrastructure/guards/jwt-auth.guard.js';
 import { RolesGuard } from './infrastructure/guards/roles.guard.js';
 import { ColaboradorAuthRepository } from './infrastructure/repositories/colaborador-auth.repository.js';
+import { ExchangeCodeService } from './application/exchange-code.service.js';
 import { AuthController } from './presentation/auth.controller.js';
 import { ColaboradorModule } from '../colaborador/colaborador.module.js';
 
@@ -40,6 +41,7 @@ import { ColaboradorModule } from '../colaborador/colaborador.module.js';
     JwtAuthGuard,
     RolesGuard,
     ColaboradorAuthRepository,
+    ExchangeCodeService,
   ],
   exports: [AuthService, JwtAuthGuard, RolesGuard, JwtStrategy, JwtModule],
 })

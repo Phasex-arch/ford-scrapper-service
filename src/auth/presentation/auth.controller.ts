@@ -24,6 +24,7 @@ import { AuthResponseDto } from '../application/dto/auth-response.dto.js';
 import { LoginDto } from '../application/dto/login.dto.js';
 import { UpdateProfileDto } from '../application/dto/update-profile.dto.js';
 import { ChangePasswordDto } from '../application/dto/change-password.dto.js';
+import { ExchangeCodeDto } from '../application/dto/exchange-code.dto.js';
 import { Public } from '../infrastructure/decorators/public.decorator.js';
 import { CurrentUser } from '../infrastructure/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../domain/authenticated-user.js';
@@ -50,6 +51,28 @@ export class AuthController {
       ip: this.extractIp(req),
       userAgent: req.headers['user-agent']?.toString(),
     });
+  }
+
+  @Post('exchange-code')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Gera um código de uso único (30s) para repassar a sessão a outra aplicação sem expor o JWT completo na URL',
+  })
+  createExchangeCode(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.createExchangeCode(user);
+  }
+
+  @Public()
+  @Post('exchange')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Troca um código de uso único pelo JWT real (código expira em 30s e só pode ser usado uma vez)' })
+  @ApiBody({ type: ExchangeCodeDto })
+  @ApiResponse({ status: 200, type: AuthResponseDto })
+  @ApiResponse({ status: 401, description: 'Código inválido, expirado ou já usado' })
+  exchangeCode(@Body() dto: ExchangeCodeDto): AuthResponseDto {
+    return this.authService.exchangeCode(dto.code);
   }
 
   @Get('me')
