@@ -8,7 +8,41 @@ const MESES = [
   'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
 ];
 const SERIES_MESES = 6;
+const SERIES_TRIMESTRES = 6;
 const ESTOQUE_BAIXO_LIMITE = 3;
+
+export interface ReceitaSnapshot {
+  kpis: {
+    /** Confirmada + pipeline (financiamentos pendente/em análise) do mês corrente. */
+    total: number;
+    /** Só o que já fechou: financiamentos aprovados + serviços concluídos. */
+    confirmada: number;
+    /** Valor médio dos financiamentos aprovados no mês. */
+    ticketMedio: number;
+    conversao: number;
+  };
+  /** Únicas duas fontes reais de receita no sistema — nada de categoria inventada. */
+  categorias: { financiamentos: number; servicos: number };
+  trimestral: { labels: string[]; valores: number[] };
+  geradoEm: string;
+}
+
+export interface DesempenhoSnapshot {
+  kpis: {
+    /** % de clientes com status ATIVO sobre o total de clientes cadastrados. */
+    retencao: number;
+    /** % de ordens de serviço concluídas sobre o total criado no mês. */
+    produtividade: number;
+  };
+  /** Um por colaborador com papel de venda (GERENTE/FUNCIONARIO) — conversão
+   * real dos leads atribuídos a ele no mês (responsavelId). Sem atribuição
+   * de "responsável" no lead, o colaborador aparece com 0%, não some da
+   * lista — é dado real de que ninguém foi atribuído a ele ainda. */
+  consultores: { nome: string; conversao: number }[];
+  /** Últimos N meses: % de clientes criados naquele mês que seguem ATIVO hoje. */
+  retencaoMensal: { labels: string[]; valores: number[] };
+  geradoEm: string;
+}
 
 export interface DashboardSnapshot {
   periodo: DashPeriod;
@@ -43,6 +77,8 @@ export interface DashboardSnapshot {
   series: {
     labels: string[];
     revenue: number[];
+    /** Meta de receita mensal cadastrada em Metas — linha de referência tracejada. */
+    target: number[];
     conversion: number[];
   };
   alertas: {
@@ -154,6 +190,188 @@ export class DashboardService {
       series,
       alertas,
       geradoEm: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Snapshot financeiro pra tela de Receita — mês corrente. Reaproveita a
+   * mesma definição de receita do dashboard (financiamento aprovado +
+   * serviço concluído), mas separa em "confirmada" (já fechou) vs "total"
+   * (confirmada + pipeline ainda em aberto), e expõe a única quebra por
+   * categoria que tem fonte real: financiamentos vs serviços.
+   */
+  async receita(): Promise<ReceitaSnapshot> {
+    const intervalo = this.computeInterval('mes');
+    const where = { createdAt: { gte: intervalo.inicio, lt: intervalo.fim } };
+
+    const [financiamentos, ordensConcluidas, leadsTotal, leadsConvertidos, trimestral] =
+      await Promise.all([
+        this.prisma.financiamento.findMany({ where, select: { valor: true, status: true } }),
+        this.prisma.ordemServico.findMany({
+          where: { ...where, status: 'CONCLUIDO' },
+          select: { valor: true },
+        }),
+        this.prisma.lead.count({ where }),
+        this.prisma.lead.count({
+          where: { ...where, financiamentos: { some: { status: 'APROVADO' } } },
+        }),
+        this.buildQuarterlySeries(SERIES_TRIMESTRES),
+      ]);
+
+    const aprovados = financiamentos.filter((f) => f.status === 'APROVADO');
+    const pipeline = financiamentos.filter(
+      (f) => f.status === 'PENDENTE' || f.status === 'ANALISE',
+    );
+    const receitaFinanciamentos = aprovados.reduce((acc, f) => acc + f.valor, 0);
+    const receitaServicos = ordensConcluidas.reduce((acc, o) => acc + o.valor, 0);
+    const receitaPipeline = pipeline.reduce((acc, f) => acc + f.valor, 0);
+    const confirmada = receitaFinanciamentos + receitaServicos;
+
+    return {
+      kpis: {
+        total: Math.round(confirmada + receitaPipeline),
+        confirmada: Math.round(confirmada),
+        ticketMedio: aprovados.length > 0 ? Math.round(receitaFinanciamentos / aprovados.length) : 0,
+        conversao: leadsTotal > 0 ? +((leadsConvertidos / leadsTotal) * 100).toFixed(1) : 0,
+      },
+      categorias: {
+        financiamentos: Math.round(receitaFinanciamentos),
+        servicos: Math.round(receitaServicos),
+      },
+      trimestral,
+      geradoEm: new Date().toISOString(),
+    };
+  }
+
+  /** Últimos N trimestres (civis) de receita real — mesma definição de sempre. */
+  private async buildQuarterlySeries(quarters: number) {
+    const now = new Date();
+    const currentQStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
+    const start = new Date(
+      Date.UTC(now.getUTCFullYear(), currentQStartMonth - 3 * (quarters - 1), 1),
+    );
+
+    const [financiamentosAprovados, servicosConcluidos] = await Promise.all([
+      this.prisma.financiamento.findMany({
+        where: { status: 'APROVADO', createdAt: { gte: start } },
+        select: { valor: true, createdAt: true },
+      }),
+      this.prisma.ordemServico.findMany({
+        where: { status: 'CONCLUIDO', createdAt: { gte: start } },
+        select: { valor: true, createdAt: true },
+      }),
+    ]);
+
+    const quarterKey = (d: Date) => `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+
+    const buckets: { key: string; label: string; valor: number }[] = [];
+    for (let i = quarters - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), currentQStartMonth - 3 * i, 1));
+      buckets.push({ key: quarterKey(d), label: `Q${Math.floor(d.getUTCMonth() / 3) + 1}/${d.getUTCFullYear()}`, valor: 0 });
+    }
+    const byKey = new Map(buckets.map((b) => [b.key, b]));
+
+    for (const f of financiamentosAprovados) {
+      const bucket = byKey.get(quarterKey(f.createdAt));
+      if (bucket) bucket.valor += f.valor;
+    }
+    for (const s of servicosConcluidos) {
+      const bucket = byKey.get(quarterKey(s.createdAt));
+      if (bucket) bucket.valor += s.valor;
+    }
+
+    return {
+      labels: buckets.map((b) => b.label),
+      valores: buckets.map((b) => Math.round(b.valor)),
+    };
+  }
+
+  /**
+   * Snapshot de performance pra tela de Desempenho. Retenção e produtividade
+   * são calculados de dados que já existem (Cliente.status, OrdemServico
+   * concluída). Performance por consultor depende de Lead.responsavelId —
+   * um colaborador sem nenhum lead atribuído aparece com 0%, honestamente,
+   * em vez de sumir da lista.
+   */
+  async desempenho(): Promise<DesempenhoSnapshot> {
+    const intervalo = this.computeInterval('mes');
+    const where = { createdAt: { gte: intervalo.inicio, lt: intervalo.fim } };
+
+    const [totalClientes, clientesAtivos, ordensNoMes, ordensConcluidas, consultores, retencaoMensal] =
+      await Promise.all([
+        this.prisma.cliente.count(),
+        this.prisma.cliente.count({ where: { status: 'ATIVO' } }),
+        this.prisma.ordemServico.count({ where }),
+        this.prisma.ordemServico.count({ where: { ...where, status: 'CONCLUIDO' } }),
+        this.buildConsultorPerformance(intervalo),
+        this.buildRetencaoMensal(SERIES_MESES),
+      ]);
+
+    return {
+      kpis: {
+        retencao: totalClientes > 0 ? +((clientesAtivos / totalClientes) * 100).toFixed(1) : 0,
+        produtividade: ordensNoMes > 0 ? +((ordensConcluidas / ordensNoMes) * 100).toFixed(1) : 0,
+      },
+      consultores,
+      retencaoMensal,
+      geradoEm: new Date().toISOString(),
+    };
+  }
+
+  private async buildConsultorPerformance(intervalo: { inicio: Date; fim: Date }) {
+    const colaboradores = await this.prisma.colaborador.findMany({
+      where: { role: { in: ['GERENTE', 'FUNCIONARIO'] }, ativo: true },
+      select: { id: true, nome: true },
+      orderBy: { nome: 'asc' },
+    });
+
+    return Promise.all(
+      colaboradores.map(async (c) => {
+        const where = {
+          responsavelId: c.id,
+          createdAt: { gte: intervalo.inicio, lt: intervalo.fim },
+        };
+        const [total, convertidos] = await Promise.all([
+          this.prisma.lead.count({ where }),
+          this.prisma.lead.count({
+            where: { ...where, financiamentos: { some: { status: 'APROVADO' } } },
+          }),
+        ]);
+        return {
+          nome: c.nome,
+          conversao: total > 0 ? +((convertidos / total) * 100).toFixed(1) : 0,
+        };
+      }),
+    );
+  }
+
+  private async buildRetencaoMensal(months: number) {
+    const now = new Date();
+    const start = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1),
+    );
+    const clientes = await this.prisma.cliente.findMany({
+      where: { createdAt: { gte: start } },
+      select: { createdAt: true, status: true },
+    });
+
+    const buckets: { key: string; label: string; total: number; ativos: number }[] = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      buckets.push({ key: this.monthKey(d), label: this.monthLabel(d), total: 0, ativos: 0 });
+    }
+    const byKey = new Map(buckets.map((b) => [b.key, b]));
+
+    for (const c of clientes) {
+      const bucket = byKey.get(this.monthKey(c.createdAt));
+      if (!bucket) continue;
+      bucket.total += 1;
+      if (c.status === 'ATIVO') bucket.ativos += 1;
+    }
+
+    return {
+      labels: buckets.map((b) => b.label),
+      valores: buckets.map((b) => (b.total > 0 ? Math.round((b.ativos / b.total) * 100) : 0)),
     };
   }
 
@@ -316,6 +534,12 @@ export class DashboardService {
    * (financiamentos aprovados + serviços concluídos) e conversão de leads,
    * pro RevenueChart do dashboard. Independente do `periodo` selecionado —
    * é sempre "os últimos N meses fechados por mês civil".
+   *
+   * `target` é a meta de receita mensal cadastrada em Metas (indicador
+   * "receita") — mesmo valor repetido em todos os meses da série, como
+   * linha de referência ("é aqui que a receita mensal precisa chegar"), não
+   * uma meta histórica por mês (o sistema só guarda a meta do mês corrente).
+   * Fica em 0 (linha não aparece) se não houver meta de receita cadastrada.
    */
   private async buildMonthlySeries(months: number) {
     const now = new Date();
@@ -323,7 +547,7 @@ export class DashboardService {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1),
     );
 
-    const [financiamentosAprovados, servicosConcluidos, leads, leadsConvertidos] =
+    const [financiamentosAprovados, servicosConcluidos, leads, leadsConvertidos, metaReceita] =
       await Promise.all([
         this.prisma.financiamento.findMany({
           where: { status: 'APROVADO', createdAt: { gte: start } },
@@ -344,7 +568,13 @@ export class DashboardService {
           },
           select: { id: true },
         }),
+        this.prisma.meta.findFirst({
+          where: { indicador: 'receita' },
+          orderBy: { createdAt: 'desc' },
+          select: { alvo: true },
+        }),
       ]);
+    const metaMensal = metaReceita?.alvo ?? 0;
 
     const convertedIds = new Set(leadsConvertidos.map((l) => l.id));
 
@@ -385,6 +615,7 @@ export class DashboardService {
     return {
       labels: buckets.map((b) => b.label),
       revenue: buckets.map((b) => Math.round(b.receita)),
+      target: buckets.map(() => Math.round(metaMensal)),
       conversion: buckets.map((b) =>
         b.leadsTotal > 0 ? +((b.leadsConvertidos / b.leadsTotal) * 100).toFixed(1) : 0,
       ),

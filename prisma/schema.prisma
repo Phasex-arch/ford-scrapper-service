@@ -115,6 +115,8 @@ model Colaborador {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   auditLogs AuditLog[]
+  leadsResponsavel          Lead[]          @relation("LeadResponsavel")
+  financiamentosResponsavel Financiamento[] @relation("FinanciamentoResponsavel")
 
   @@index([email])
   @@index([registro])
@@ -285,12 +287,15 @@ model Financiamento {
   data        String
   leadId      String?
   lead        Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  responsavelId String?
+  responsavel   Colaborador?      @relation("FinanciamentoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
   @@index([status])
   @@index([clienteNome])
   @@index([leadId])
+  @@index([responsavelId])
 }
 
 enum LeadUrgencia {
@@ -312,6 +317,8 @@ model Lead {
   telefone         String
   email            String?
   insight          String?
+  responsavelId    String?
+  responsavel      Colaborador? @relation("LeadResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -320,6 +327,7 @@ model Lead {
 
   @@index([urgencia])
   @@index([clienteNome])
+  @@index([responsavelId])
 }
 
 enum AgendamentoStatus {
@@ -412,4 +420,14 @@ model Tecnico {
 
   @@index([status])
   @@index([especialidade])
+}
+
+/// Singleton — só existe uma linha, lida/gravada pela tela de Configurações.
+model ConfiguracaoConcessionaria {
+  id        String   @id @default(uuid())
+  nome      String
+  cnpj      String
+  endereco  String
+  telefone  String
+  updatedAt DateTime @updatedAt
 }

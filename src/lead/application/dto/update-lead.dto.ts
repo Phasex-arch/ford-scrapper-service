@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -65,4 +66,9 @@ export class UpdateLeadDto {
   @IsString()
   @MaxLength(1000)
   insight?: string;
+
+  @ApiPropertyOptional({ description: 'UUID do colaborador responsável (consultor que assumiu o lead)' })
+  @IsOptional()
+  @IsUUID()
+  responsavelId?: string;
 }

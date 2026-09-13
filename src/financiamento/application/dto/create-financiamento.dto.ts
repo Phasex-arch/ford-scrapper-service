@@ -84,4 +84,9 @@ export class CreateFinanciamentoDto {
   @IsOptional()
   @IsUUID()
   leadId?: string;
+
+  @ApiPropertyOptional({ description: 'UUID do colaborador responsável (consultor que fechou o contrato)' })
+  @IsOptional()
+  @IsUUID()
+  responsavelId?: string;
 }

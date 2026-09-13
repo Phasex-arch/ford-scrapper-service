@@ -16,6 +16,7 @@ import { JwtAuthGuard } from './auth/infrastructure/guards/jwt-auth.guard.js';
 
 import { ColaboradorModule } from './colaborador/colaborador.module.js';
 import { AgendamentoModule } from './agendamento/agendamento.module.js';
+import { ConfiguracoesModule } from './configuracoes/configuracoes.module.js';
 import { AvaliacaoModule } from './avaliacao/avaliacao.module.js';
 import { ClienteModule } from './cliente/cliente.module.js';
 import { EstoqueModule } from './estoque/estoque.module.js';
@@ -39,6 +40,7 @@ import { VeiculoClienteModule } from './veiculo-cliente/veiculo-cliente.module.j
 
     ColaboradorModule,
     AgendamentoModule,
+    ConfiguracoesModule,
     AvaliacaoModule,
     ClienteModule,
     EstoqueModule,
