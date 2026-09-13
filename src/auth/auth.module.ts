@@ -8,9 +8,11 @@ import { JwtAuthGuard } from './infrastructure/guards/jwt-auth.guard.js';
 import { RolesGuard } from './infrastructure/guards/roles.guard.js';
 import { ColaboradorAuthRepository } from './infrastructure/repositories/colaborador-auth.repository.js';
 import { AuthController } from './presentation/auth.controller.js';
+import { ColaboradorModule } from '../colaborador/colaborador.module.js';
 
 @Module({
   imports: [
+    ColaboradorModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
