@@ -5,10 +5,8 @@ import { FordCrawlerService } from './infrastructure/ford-crawler.service.js';
 import { PdfDownloaderService } from './infrastructure/pdf-downloader.service.js';
 import { GeminiReaderService } from './infrastructure/gemini-reader.service.js';
 import { PdfTextExtractorService } from './infrastructure/pdf-text-extractor.service.js';
-import { VehicleModule } from '../vehicle/vehicle.module.js';
 
 @Module({
-  imports: [VehicleModule],
   controllers: [ScrapperController],
   providers: [
     ScrapperService,

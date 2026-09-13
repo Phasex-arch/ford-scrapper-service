@@ -51,7 +51,7 @@ export class ColaboradorController {
   @ApiQuery({ name: 'ativo', required: false, type: Boolean })
   @ApiQuery({ name: 'role', required: false, enum: Role })
   @ApiQuery({ name: 'search', required: false })
-  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 200, description: 'Lista paginada de colaboradores' })
   async list(
     @Query() pagination: PaginationQueryDto,
     @Query('ativo') ativo?: string,
@@ -87,7 +87,7 @@ export class ColaboradorController {
     format: 'uuid',
   })
   @ApiResponse({ status: 200, type: ColaboradorResponseDto })
-  @ApiResponse({ status: 404, description: 'Nao encontrado' })
+  @ApiResponse({ status: 404, description: 'Colaborador não encontrado' })
   async findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     const c = await this.service.findById(uuid);
     return toColaboradorResponse(c);
@@ -97,7 +97,7 @@ export class ColaboradorController {
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Criar colaborador (ADMIN)' })
   @ApiResponse({ status: 201, type: ColaboradorResponseDto })
-  @ApiResponse({ status: 409, description: 'Email/CPF/registro ja cadastrado' })
+  @ApiResponse({ status: 409, description: 'Email, CPF ou registro já cadastrado' })
   async create(@Body() dto: CreateColaboradorDto) {
     const c = await this.service.create(dto);
     return toColaboradorResponse(c);

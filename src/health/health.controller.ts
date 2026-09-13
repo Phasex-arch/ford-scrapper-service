@@ -2,15 +2,15 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/infrastructure/decorators/public.decorator.js';
 
-@ApiTags('Health')
+@ApiTags('Saúde')
 @Controller('health')
 export class HealthController {
   private readonly startedAt = new Date();
 
   @Public()
   @Get()
-  @ApiOperation({ summary: 'API health check (public)' })
-  @ApiResponse({ status: 200, description: 'Service is healthy' })
+  @ApiOperation({ summary: 'Verificar saúde da API (público)' })
+  @ApiResponse({ status: 200, description: 'Serviço saudável' })
   check() {
     const uptimeMs = Date.now() - this.startedAt.getTime();
     const uptimeSeconds = Math.floor(uptimeMs / 1000);

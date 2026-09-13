@@ -43,6 +43,7 @@ export class PublicLeadService {
       urgencia: dto.urgencia ?? LeadUrgencia.MEDIA,
       valorEstimado: dto.valorEstimado ?? 0,
       telefone: dto.telefone,
+      email: dto.email,
     };
 
     let lead;
@@ -87,13 +88,13 @@ export class PublicLeadService {
       body: JSON.stringify({
         from: input.from,
         to: [input.to],
-        subject: `Novo contato público - ${input.dto.nome}`,
+        subject: `Novo contato público — ${input.dto.veiculoInteresse} — ${input.dto.nome}`,
         text: [
           `Lead: ${input.leadId}`,
           `Nome: ${input.dto.nome}`,
           `Email: ${input.dto.email}`,
           `Telefone: ${input.dto.telefone}`,
-          `Veículo: ${input.dto.veiculoInteresse}`,
+          `Interesse: ${input.dto.veiculoInteresse}`,
           `Mensagem: ${input.dto.mensagem}`,
         ].join('\n'),
         reply_to: input.dto.email,

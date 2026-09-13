@@ -31,12 +31,12 @@ export class DashboardController {
 
   @Get()
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
-  @ApiOperation({ summary: 'KPIs agregados (real time)' })
+  @ApiOperation({ summary: 'KPIs agregados (tempo real)' })
   @ApiQuery({
     name: 'periodo',
     required: false,
     enum: PERIODS,
-    description: 'Periodo do snapshot. Default: mes',
+    description: 'Período do retrato. Padrão: mês',
   })
   @ApiResponse({ status: 200 })
   snapshot(@Query('periodo') periodo?: string) {

@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsEmail,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -52,6 +53,12 @@ export class UpdateLeadDto {
   @IsString()
   @MaxLength(20)
   telefone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(120)
+  email?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

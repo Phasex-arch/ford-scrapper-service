@@ -23,7 +23,7 @@ import { Public } from '../infrastructure/decorators/public.decorator.js';
 import { CurrentUser } from '../infrastructure/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../domain/authenticated-user.js';
 
-@ApiTags('Auth')
+@ApiTags('Autenticação')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -35,7 +35,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Autenticar colaborador e obter token JWT' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, type: AuthResponseDto })
-  @ApiResponse({ status: 401, description: 'Credenciais invalidas' })
+  @ApiResponse({ status: 401, description: 'Credenciais inválidas' })
   login(@Body() dto: LoginDto, @Req() req: Request): Promise<AuthResponseDto> {
     return this.authService.login(dto, {
       ip: this.extractIp(req),
@@ -45,8 +45,8 @@ export class AuthController {
 
   @Get('me')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Obter dados do usuario autenticado' })
-  @ApiResponse({ status: 200 })
+  @ApiOperation({ summary: 'Obter dados do usuário autenticado' })
+  @ApiResponse({ status: 200, description: 'Dados do usuário autenticado' })
   me(@CurrentUser() user: AuthenticatedUser): AuthenticatedUser {
     return user;
   }

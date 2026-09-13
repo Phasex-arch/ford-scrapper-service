@@ -22,7 +22,7 @@ class HistoryQueryDto {
   limit?: number;
 }
 
-@ApiTags('Sync')
+@ApiTags('Sincronização')
 @ApiBearerAuth('JWT')
 @UseGuards(RolesGuard)
 @Controller('sync')
@@ -34,17 +34,17 @@ export class SyncController {
   @Post()
   @Roles(Role.ADMIN)
   @ApiOperation({
-    summary: 'Trigger a full sync — ADMIN only',
+    summary: 'Disparar sincronização completa — somente ADMIN',
   })
   @ApiResponse({
     status: 201,
-    description: 'Sync completed with result summary',
+    description: 'Sincronização concluída com resumo do resultado',
   })
   @ApiResponse({
     status: 401,
-    description: 'Missing/invalid auth token',
+    description: 'Token de autenticação ausente ou inválido',
   })
-  @ApiResponse({ status: 403, description: 'Role denied' })
+  @ApiResponse({ status: 403, description: 'Perfil sem permissão' })
   async triggerSync() {
     this.logger.log('POST /sync — triggering full sync');
     return this.syncService.executeSyncRun();
@@ -52,9 +52,9 @@ export class SyncController {
 
   @Get('history')
   @Roles(Role.ADMIN, Role.GERENTE)
-  @ApiOperation({ summary: 'Get sync run history (ADMIN/GERENTE)' })
+  @ApiOperation({ summary: 'Consultar histórico de sincronizações (ADMIN/GERENTE)' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiResponse({ status: 200, description: 'List of recent sync runs' })
+  @ApiResponse({ status: 200, description: 'Lista das sincronizações recentes' })
   async getHistory(@Query() q: HistoryQueryDto) {
     return this.syncService.getSyncHistory(q.limit ?? 10);
   }

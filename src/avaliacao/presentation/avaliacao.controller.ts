@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiParam,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -25,15 +26,13 @@ import { Public } from '../../auth/infrastructure/decorators/public.decorator.js
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { AvaliacaoService } from '../application/avaliacao.service.js';
 import { CreateAvaliacaoDto } from '../application/dto/create-avaliacao.dto.js';
 import { UpdateAvaliacaoDto } from '../application/dto/update-avaliacao.dto.js';
+import { ListAvaliacoesQueryDto } from '../application/dto/list-avaliacoes-query.dto.js';
 
-@ApiTags('Avaliacoes')
+@ApiTags('Avaliações')
 @Controller('avaliacoes')
 @UseInterceptors(AuditInterceptor)
 export class AvaliacaoController {
@@ -41,22 +40,18 @@ export class AvaliacaoController {
 
   @Public()
   @Get()
-  @ApiOperation({ summary: 'Listar avaliacoes (publico)' })
+  @ApiOperation({ summary: 'Listar avaliações (público)' })
   @ApiQuery({ name: 'notaMin', required: false, type: Number })
   @ApiQuery({ name: 'notaMax', required: false, type: Number })
-  @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('notaMin') notaMin?: string,
-    @Query('notaMax') notaMax?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  @ApiResponse({ status: 200, description: 'Lista paginada de avaliações' })
+  async list(@Query() query: ListAvaliacoesQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      notaMin: notaMin ? Number(notaMin) : undefined,
-      notaMax: notaMax ? Number(notaMax) : undefined,
+      notaMin: query.notaMin,
+      notaMax: query.notaMax,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),
@@ -66,21 +61,24 @@ export class AvaliacaoController {
 
   @Public()
   @Get('stats')
-  @ApiOperation({ summary: 'Estatisticas publicas das avaliacoes' })
+  @ApiOperation({ summary: 'Estatísticas públicas das avaliações' })
   stats() {
     return this.service.stats();
   }
 
   @Public()
   @Get(':uuid')
-  @ApiOperation({ summary: 'Buscar avaliacao por UUID (publico)' })
+  @ApiOperation({ summary: 'Buscar avaliação por UUID (público)' })
+  @ApiParam({ name: 'uuid', description: 'UUID da avaliação', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Avaliação encontrada' })
   findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.findById(uuid);
   }
 
   @Public()
   @Post()
-  @ApiOperation({ summary: 'Criar avaliacao (publico)' })
+  @ApiOperation({ summary: 'Criar avaliação (público)' })
+  @ApiResponse({ status: 201, description: 'Avaliação criada' })
   create(@Body() dto: CreateAvaliacaoDto) {
     return this.service.create(dto);
   }
@@ -89,7 +87,9 @@ export class AvaliacaoController {
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiBearerAuth()
   @Patch(':uuid')
-  @ApiOperation({ summary: 'Atualizar avaliacao (autenticado)' })
+  @ApiOperation({ summary: 'Atualizar avaliação (autenticado)' })
+  @ApiParam({ name: 'uuid', description: 'UUID da avaliação', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Avaliação atualizada' })
   update(
     @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateAvaliacaoDto,
@@ -102,7 +102,9 @@ export class AvaliacaoController {
   @ApiBearerAuth()
   @Delete(':uuid')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remover avaliacao (ADMIN/GERENTE)' })
+  @ApiOperation({ summary: 'Remover avaliação (ADMIN/GERENTE)' })
+  @ApiParam({ name: 'uuid', description: 'UUID da avaliação', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Avaliação removida' })
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
   }

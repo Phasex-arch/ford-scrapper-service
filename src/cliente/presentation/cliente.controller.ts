@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiParam,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -24,13 +25,11 @@ import { ClienteStatus, Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { ClienteService } from '../application/cliente.service.js';
 import { CreateClienteDto } from '../application/dto/create-cliente.dto.js';
 import { UpdateClienteDto } from '../application/dto/update-cliente.dto.js';
+import { ListClientesQueryDto } from '../application/dto/list-clientes-query.dto.js';
 
 @ApiTags('Clientes')
 @ApiBearerAuth()
@@ -46,21 +45,16 @@ export class ClienteController {
   @ApiQuery({ name: 'status', required: false, enum: ClienteStatus })
   @ApiQuery({ name: 'segmento', required: false })
   @ApiQuery({ name: 'search', required: false })
-  @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('status') status?: ClienteStatus,
-    @Query('segmento') segmento?: string,
-    @Query('search') search?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  @ApiResponse({ status: 200, description: 'Lista paginada de clientes' })
+  async list(@Query() query: ListClientesQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      status,
-      segmento,
-      search,
+      status: query.status,
+      segmento: query.segmento,
+      search: query.search,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),
@@ -71,6 +65,8 @@ export class ClienteController {
   @Get(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiOperation({ summary: 'Buscar cliente por UUID' })
+  @ApiParam({ name: 'uuid', description: 'UUID do cliente', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Cliente encontrado' })
   findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.findById(uuid);
   }
@@ -78,6 +74,7 @@ export class ClienteController {
   @Post()
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiOperation({ summary: 'Criar cliente' })
+  @ApiResponse({ status: 201, description: 'Cliente criado' })
   create(@Body() dto: CreateClienteDto) {
     return this.service.create(dto);
   }
@@ -85,6 +82,8 @@ export class ClienteController {
   @Patch(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiOperation({ summary: 'Atualizar cliente' })
+  @ApiParam({ name: 'uuid', description: 'UUID do cliente', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Cliente atualizado' })
   update(
     @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateClienteDto,
@@ -96,6 +95,8 @@ export class ClienteController {
   @Roles(Role.ADMIN, Role.GERENTE)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remover cliente (ADMIN/GERENTE)' })
+  @ApiParam({ name: 'uuid', description: 'UUID do cliente', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Cliente removido' })
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
   }

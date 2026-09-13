@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiParam,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -27,13 +28,11 @@ import {
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { FinanciamentoService } from '../application/financiamento.service.js';
 import { CreateFinanciamentoDto } from '../application/dto/create-financiamento.dto.js';
 import { UpdateFinanciamentoDto } from '../application/dto/update-financiamento.dto.js';
+import { ListFinanciamentosQueryDto } from '../application/dto/list-financiamentos-query.dto.js';
 
 @ApiTags('Financiamentos')
 @ApiBearerAuth()
@@ -48,19 +47,15 @@ export class FinanciamentoController {
   @ApiOperation({ summary: 'Listar financiamentos' })
   @ApiQuery({ name: 'status', required: false, enum: FinanciamentoStatus })
   @ApiQuery({ name: 'search', required: false })
-  @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('status') status?: FinanciamentoStatus,
-    @Query('search') search?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  @ApiResponse({ status: 200, description: 'Lista paginada de financiamentos' })
+  async list(@Query() query: ListFinanciamentosQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      status,
-      search,
+      status: query.status,
+      search: query.search,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),
@@ -70,6 +65,9 @@ export class FinanciamentoController {
 
   @Get(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({ summary: 'Buscar financiamento por UUID' })
+  @ApiParam({ name: 'uuid', description: 'UUID do financiamento', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Financiamento encontrado' })
   findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.findById(uuid);
   }
@@ -77,12 +75,16 @@ export class FinanciamentoController {
   @Post()
   @Roles(Role.ADMIN, Role.GERENTE)
   @ApiOperation({ summary: 'Criar financiamento (ADMIN/GERENTE)' })
+  @ApiResponse({ status: 201, description: 'Financiamento criado' })
   create(@Body() dto: CreateFinanciamentoDto) {
     return this.service.create(dto);
   }
 
   @Patch(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE)
+  @ApiOperation({ summary: 'Atualizar financiamento' })
+  @ApiParam({ name: 'uuid', description: 'UUID do financiamento', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Financiamento atualizado' })
   update(
     @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateFinanciamentoDto,
@@ -94,6 +96,8 @@ export class FinanciamentoController {
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remover financiamento (ADMIN)' })
+  @ApiParam({ name: 'uuid', description: 'UUID do financiamento', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Financiamento removido' })
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
   }

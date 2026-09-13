@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiParam,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -24,13 +25,11 @@ import { Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { MetaService } from '../application/meta.service.js';
 import { CreateMetaDto } from '../application/dto/create-meta.dto.js';
 import { UpdateMetaDto } from '../application/dto/update-meta.dto.js';
+import { ListMetasQueryDto } from '../application/dto/list-metas-query.dto.js';
 
 @ApiTags('Metas')
 @ApiBearerAuth()
@@ -45,19 +44,15 @@ export class MetaController {
   @ApiOperation({ summary: 'Listar metas' })
   @ApiQuery({ name: 'periodo', required: false })
   @ApiQuery({ name: 'indicador', required: false })
-  @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('periodo') periodo?: string,
-    @Query('indicador') indicador?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  @ApiResponse({ status: 200, description: 'Lista paginada de metas' })
+  async list(@Query() query: ListMetasQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      periodo,
-      indicador,
+      periodo: query.periodo,
+      indicador: query.indicador,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),
@@ -67,6 +62,9 @@ export class MetaController {
 
   @Get(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({ summary: 'Buscar meta por UUID' })
+  @ApiParam({ name: 'uuid', description: 'UUID da meta', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Meta encontrada' })
   findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.findById(uuid);
   }
@@ -74,12 +72,16 @@ export class MetaController {
   @Post()
   @Roles(Role.ADMIN, Role.GERENTE)
   @ApiOperation({ summary: 'Criar meta (ADMIN/GERENTE)' })
+  @ApiResponse({ status: 201, description: 'Meta criada' })
   create(@Body() dto: CreateMetaDto) {
     return this.service.create(dto);
   }
 
   @Patch(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE)
+  @ApiOperation({ summary: 'Atualizar meta' })
+  @ApiParam({ name: 'uuid', description: 'UUID da meta', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Meta atualizada' })
   update(
     @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateMetaDto,
@@ -90,6 +92,9 @@ export class MetaController {
   @Delete(':uuid')
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remover meta (ADMIN)' })
+  @ApiParam({ name: 'uuid', description: 'UUID da meta', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Meta removida' })
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
   }

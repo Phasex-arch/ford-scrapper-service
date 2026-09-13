@@ -15,6 +15,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
  * - ValidationPipe global com whitelist + forbidNonWhitelisted (slide 5).
  * - HttpExceptionFilter padronizado evita vazar stack traces (slide 9).
  * - `trust proxy` repassa o IP real do cliente para audit/logging.
+ * - Em produção, recusa subir com CORS_ORIGINS="*" ou JWT_SECRET fraco/placeholder.
  */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: true });
@@ -56,6 +57,19 @@ async function bootstrap() {
     );
   }
 
+  // JWT_SECRET fraco ou igual ao placeholder do .env.example nunca pode
+  // subir em produção — só é validado presença/tamanho aqui; auth.module.ts
+  // e jwt.strategy.ts já recusam subir sem JWT_SECRET em qualquer ambiente.
+  const jwtSecret = process.env.JWT_SECRET ?? '';
+  const isPlaceholderSecret =
+    jwtSecret === 'change-me-super-secret-with-at-least-32-chars';
+  if (isProd && (isPlaceholderSecret || jwtSecret.length < 32)) {
+    throw new Error(
+      'JWT_SECRET fraco ou igual ao valor de exemplo do .env.example. ' +
+        'Gere um valor aleatório com pelo menos 32 caracteres antes de subir em produção.',
+    );
+  }
+
   app.enableCors({
     origin: isWildcardOnly ? true : rawOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
@@ -79,7 +93,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Ford Brasil Vehicle Catalog & Dealership API')
+    .setTitle('API Ford Brasil — Catálogo de veículos e concessionária')
     .setDescription(
       [
         'API profissional para consulta de veículos Ford Brasil e gestão da concessionária.',
@@ -102,20 +116,23 @@ async function bootstrap() {
       },
       'JWT',
     )
-    .addTag('Auth', 'Autenticação JWT, login e registro de colaboradores')
+    .addTag('Autenticação', 'Autenticação JWT e dados do usuário autenticado')
     .addTag('Colaboradores', 'CRUD de colaboradores e gestão de papéis')
     .addTag('Clientes', 'CRUD de clientes da concessionária')
     .addTag('Estoque', 'CRUD de veículos em estoque')
+    .addTag('Histórico de veículos', 'Veículos adquiridos por cada cliente (posse atual e anteriores)')
     .addTag('Leads', 'Pipeline de leads inteligentes')
     .addTag('Financiamentos', 'Carteira de financiamentos')
-    .addTag('Servicos', 'Ordens de serviço (oficina)')
-    .addTag('Tecnicos', 'Equipe técnica da oficina')
+    .addTag('Serviços', 'Ordens de serviço da oficina')
+    .addTag('Técnicos', 'Equipe técnica da oficina')
     .addTag('Metas', 'Metas e indicadores comerciais')
-    .addTag('Avaliacoes', 'Avaliações de clientes (endpoints públicos)')
+    .addTag('Avaliações', 'Avaliações de clientes e endpoints públicos')
     .addTag('Dashboard', 'KPIs agregados em tempo real')
-    .addTag('Health', 'Health check do serviço')
-    .addTag('Vehicles', 'Catálogo Ford (scrapping)')
-    .addTag('Scrapper', 'Disparo manual do scraping (autenticado)')
+    .addTag('Saúde', 'Verificação de saúde do serviço')
+    .addTag('Veículos', 'Catálogo Ford e dados coletados')
+    .addTag('Sincronização', 'Sincronização manual de dados (autenticada)')
+    .addTag('Coleta de dados', 'Coleta de dados do catálogo Ford')
+    .addTag('Contato público', 'Recebimento de contatos e leads públicos')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

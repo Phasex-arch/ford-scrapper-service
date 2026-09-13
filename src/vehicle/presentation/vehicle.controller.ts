@@ -26,7 +26,7 @@ const SLUG_RE = /^[a-z0-9-]{1,80}$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-@ApiTags('Vehicles')
+@ApiTags('Veículos')
 @Controller('vehicles')
 export class VehicleController {
   private readonly logger = new Logger(VehicleController.name);
@@ -35,11 +35,11 @@ export class VehicleController {
 
   @Get()
   @ApiOperation({
-    summary: 'List all vehicles with optional filters, pagination and sorting',
+    summary: 'Listar veículos com filtros, paginação e ordenação opcionais',
   })
   @ApiResponse({
     status: 200,
-    description: 'Paginated vehicle list with filters applied',
+    description: 'Lista paginada de veículos com os filtros aplicados',
   })
   async findAll(@Query() filters: VehicleFilterDto) {
     const page = filters.page ?? 1;
@@ -66,8 +66,8 @@ export class VehicleController {
   }
 
   @Get('categories')
-  @ApiOperation({ summary: 'List all distinct vehicle categories with count' })
-  @ApiResponse({ status: 200, description: 'List of categories' })
+  @ApiOperation({ summary: 'Listar categorias distintas de veículos com contagem' })
+  @ApiResponse({ status: 200, description: 'Lista de categorias' })
   async findAllCategories() {
     this.logger.log('GET /vehicles/categories');
     const categories = await this.vehicleService.findDistinctCategories();
@@ -82,8 +82,8 @@ export class VehicleController {
   }
 
   @Get('colors')
-  @ApiOperation({ summary: 'List all distinct vehicle colors with count' })
-  @ApiResponse({ status: 200, description: 'List of colors' })
+  @ApiOperation({ summary: 'Listar cores distintas de veículos com contagem' })
+  @ApiResponse({ status: 200, description: 'Lista de cores' })
   async findAllColors() {
     this.logger.log('GET /vehicles/colors');
     const colors = await this.vehicleService.findDistinctColors();
@@ -99,9 +99,9 @@ export class VehicleController {
 
   @Get('models')
   @ApiOperation({
-    summary: 'List all distinct vehicle models with family and count',
+    summary: 'Listar modelos distintos com família e contagem',
   })
-  @ApiResponse({ status: 200, description: 'List of models' })
+  @ApiResponse({ status: 200, description: 'Lista de modelos' })
   async findAllModels() {
     this.logger.log('GET /vehicles/models');
     const models = await this.vehicleService.findDistinctModels();
@@ -118,9 +118,9 @@ export class VehicleController {
 
   @Get('versions')
   @ApiOperation({
-    summary: 'List all distinct vehicle versions with model reference',
+    summary: 'Listar versões distintas com referência ao modelo',
   })
-  @ApiResponse({ status: 200, description: 'List of versions' })
+  @ApiResponse({ status: 200, description: 'Lista de versões' })
   async findAllVersions() {
     this.logger.log('GET /vehicles/versions');
     const versions = await this.vehicleService.findDistinctVersions();
@@ -137,23 +137,23 @@ export class VehicleController {
 
   @Get('search')
   @ApiOperation({
-    summary: 'Search vehicles by text query across multiple fields',
+    summary: 'Pesquisar veículos por texto em múltiplos campos',
   })
-  @ApiQuery({ name: 'q', required: true, description: 'Search query text' })
+  @ApiQuery({ name: 'q', required: true, description: 'Texto da pesquisa' })
   @ApiQuery({
     name: 'page',
     required: false,
     type: Number,
-    description: 'Page number (default: 1)',
+    description: 'Número da página (padrão: 1)',
   })
   @ApiQuery({
     name: 'limit',
     required: false,
     type: Number,
-    description: 'Items per page (default: 20)',
+    description: 'Itens por página (padrão: 20)',
   })
-  @ApiResponse({ status: 200, description: 'Search results with pagination' })
-  @ApiResponse({ status: 400, description: 'Missing or invalid query parameter' })
+  @ApiResponse({ status: 200, description: 'Resultados da pesquisa com paginação' })
+  @ApiResponse({ status: 400, description: 'Parâmetro de pesquisa ausente ou inválido' })
   async search(
     @Query('q') q?: string,
     @Query('page') page?: string,
@@ -192,9 +192,9 @@ export class VehicleController {
 
   @Get('sources')
   @ApiOperation({
-    summary: 'List all official sources used for vehicle data collection',
+    summary: 'Listar fontes oficiais utilizadas na coleta de dados dos veículos',
   })
-  @ApiResponse({ status: 200, description: 'List of source URLs' })
+  @ApiResponse({ status: 200, description: 'Lista de URLs das fontes' })
   async findAllSources() {
     this.logger.log('GET /vehicles/sources');
     const sources = await this.vehicleService.getAllSources();
@@ -220,9 +220,9 @@ export class VehicleController {
 
   @Get('stats')
   @ApiOperation({
-    summary: 'Get aggregated statistics about the vehicle catalog',
+    summary: 'Obter estatísticas agregadas do catálogo de veículos',
   })
-  @ApiResponse({ status: 200, description: 'Catalog statistics' })
+  @ApiResponse({ status: 200, description: 'Estatísticas do catálogo' })
   async getStats() {
     this.logger.log('GET /vehicles/stats');
     const stats = await this.vehicleService.getStats();
@@ -236,14 +236,14 @@ export class VehicleController {
   }
 
   @Get(':identifier')
-  @ApiOperation({ summary: 'Get a vehicle by UUID or slug' })
+  @ApiOperation({ summary: 'Buscar veículo por UUID ou slug' })
   @ApiParam({
     name: 'identifier',
-    description: 'Vehicle UUID or slug',
+    description: 'UUID ou slug do veículo',
     example: '8d3e0b8a-4e38-4d1b-9f6a-123456789abc',
   })
-  @ApiResponse({ status: 200, description: 'Vehicle details' })
-  @ApiResponse({ status: 404, description: 'Vehicle not found' })
+  @ApiResponse({ status: 200, description: 'Detalhes do veículo' })
+  @ApiResponse({ status: 404, description: 'Veículo não encontrado' })
   async findOne(@Param('identifier') identifier: string) {
     if (!UUID_RE.test(identifier) && !SLUG_RE.test(identifier)) {
       throw new BadRequestException(

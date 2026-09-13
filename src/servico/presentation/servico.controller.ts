@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiParam,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -28,15 +29,13 @@ import {
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { ServicoService } from '../application/servico.service.js';
 import { CreateServicoDto } from '../application/dto/create-servico.dto.js';
 import { UpdateServicoDto } from '../application/dto/update-servico.dto.js';
+import { ListServicosQueryDto } from '../application/dto/list-servicos-query.dto.js';
 
-@ApiTags('Servicos')
+@ApiTags('Serviços')
 @ApiBearerAuth()
 @Controller('servicos')
 @UseGuards(RolesGuard)
@@ -55,23 +54,17 @@ export class ServicoController {
   })
   @ApiQuery({ name: 'tecnico', required: false })
   @ApiQuery({ name: 'search', required: false })
-  @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('status') status?: OrdemServicoStatus,
-    @Query('prioridade') prioridade?: OrdemServicoPrioridade,
-    @Query('tecnico') tecnico?: string,
-    @Query('search') search?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  @ApiResponse({ status: 200, description: 'Lista paginada de ordens de serviço' })
+  async list(@Query() query: ListServicosQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      status,
-      prioridade,
-      tecnico,
-      search,
+      status: query.status,
+      prioridade: query.prioridade,
+      tecnico: query.tecnico,
+      search: query.search,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),
@@ -81,18 +74,26 @@ export class ServicoController {
 
   @Get(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({ summary: 'Buscar ordem de serviço por UUID' })
+  @ApiParam({ name: 'uuid', description: 'UUID da ordem de serviço', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Ordem de serviço encontrada' })
   findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.findById(uuid);
   }
 
   @Post()
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({ summary: 'Criar ordem de serviço' })
+  @ApiResponse({ status: 201, description: 'Ordem de serviço criada' })
   create(@Body() dto: CreateServicoDto) {
     return this.service.create(dto);
   }
 
   @Patch(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({ summary: 'Atualizar ordem de serviço' })
+  @ApiParam({ name: 'uuid', description: 'UUID da ordem de serviço', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Ordem de serviço atualizada' })
   update(
     @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateServicoDto,
@@ -103,6 +104,9 @@ export class ServicoController {
   @Delete(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE)
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remover ordem de serviço (ADMIN/GERENTE)' })
+  @ApiParam({ name: 'uuid', description: 'UUID da ordem de serviço', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Ordem de serviço removida' })
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
   }

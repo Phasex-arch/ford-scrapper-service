@@ -166,9 +166,47 @@ model Cliente {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  veiculos VeiculoCliente[]
+
   @@index([status])
   @@index([segmento])
   @@index([nome])
+}
+
+enum VeiculoClienteStatus {
+  ATIVO
+  VENDIDO
+  SUBSTITUIDO
+}
+
+/// Registro de que um cliente adquiriu um veículo — a "posse" que a aba
+/// Histórico do dealership exibe. Campos de especificação são copiados no
+/// momento do registro (mesmo padrão do EstoqueVeiculo em relação ao
+/// catálogo): a ficha histórica não deve mudar se o item de estoque de
+/// origem for editado ou removido depois.
+model VeiculoCliente {
+  id               String               @id @default(uuid())
+  codigo           String               @unique
+  clienteId        String
+  cliente          Cliente              @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  estoqueVeiculoId String?
+  estoqueVeiculo   EstoqueVeiculo?      @relation(fields: [estoqueVeiculoId], references: [id], onDelete: SetNull)
+  modelo           String
+  versao           String
+  ano              String
+  cor              String
+  km               String?
+  imagem           String?
+  precoAquisicao   Float
+  dataAquisicao    DateTime
+  dataSaida        DateTime?
+  status           VeiculoClienteStatus @default(ATIVO)
+  atual            Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([clienteId])
+  @@index([estoqueVeiculoId])
 }
 
 model Avaliacao {
@@ -217,6 +255,8 @@ model EstoqueVeiculo {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
+  vendas VeiculoCliente[]
+
   @@index([modelo])
   @@index([condicao])
   @@index([status])
@@ -243,11 +283,14 @@ model Financiamento {
   parcela     Float
   status      FinanciamentoStatus @default(ANALISE)
   data        String
+  leadId      String?
+  lead        Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
   @@index([status])
   @@index([clienteNome])
+  @@index([leadId])
 }
 
 enum LeadUrgencia {
@@ -267,12 +310,39 @@ model Lead {
   urgencia         LeadUrgencia @default(MEDIA)
   valorEstimado    Float
   telefone         String
+  email            String?
   insight          String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
+  financiamentos Financiamento[]
+  agendamentos   Agendamento[]
+
   @@index([urgencia])
   @@index([clienteNome])
+}
+
+enum AgendamentoStatus {
+  AGENDADO
+  CANCELADO
+  CONCLUIDO
+}
+
+model Agendamento {
+  id        String            @id @default(uuid())
+  cliente   String
+  servico   String
+  tecnico   String?
+  dataHora  DateTime
+  status    AgendamentoStatus @default(AGENDADO)
+  leadId    String?
+  lead      Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([status])
+  @@index([dataHora])
+  @@index([leadId])
 }
 
 model Meta {
@@ -315,7 +385,7 @@ model OrdemServico {
   tecnico    String
   prazo      String
   prioridade OrdemServicoPrioridade @default(OK)
-  valor      String
+  valor      Float
   status     OrdemServicoStatus     @default(PREVISTO)
   createdAt  DateTime               @default(now())
   updatedAt  DateTime               @updatedAt

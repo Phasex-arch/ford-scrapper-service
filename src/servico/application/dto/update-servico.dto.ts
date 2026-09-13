@@ -1,5 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import {
   OrdemServicoPrioridade,
   OrdemServicoStatus,
@@ -43,9 +51,10 @@ export class UpdateServicoDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
-  @MaxLength(40)
-  valor?: string;
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  valor?: number;
 
   @ApiPropertyOptional({ enum: OrdemServicoStatus })
   @IsOptional()

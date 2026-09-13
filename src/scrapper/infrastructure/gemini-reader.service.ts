@@ -126,15 +126,37 @@ export class GeminiReaderService {
         this.logger.log(`Gemini extracted ${parsed.length} version(s)`);
         return parsed;
       } catch (error) {
+        const errorMessage = this.serializeError(error);
         this.logger.error(
           `Gemini attempt ${attempt} failed`,
-          (error as Error).message,
+          errorMessage,
         );
-        if (attempt === 2) throw error;
+        if (attempt === 2 || this.isQuotaError(error)) throw error;
       }
     }
 
     return [];
+  }
+
+  private isQuotaError(error: unknown): boolean {
+    const serialized = this.serializeError(error);
+    return (
+      /"code"\s*:\s*429/.test(serialized) ||
+      serialized.includes('"status":"RESOURCE_EXHAUSTED"') ||
+      serialized.includes('RATE_LIMIT_EXCEEDED')
+    );
+  }
+
+  private serializeError(error: unknown): string {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
   }
 
   private parseJsonResponse(raw: string): GeminiVehicleExtract[] {

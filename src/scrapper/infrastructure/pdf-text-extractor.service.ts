@@ -110,18 +110,32 @@ export class PdfTextExtractorService {
   }
 
   private extractVersionNames(lines: string[], modelName: string): string[] {
-    const versions = new Set<string>();
+    const seen = new Map<string, string>();
     const versionPattern = new RegExp(
-      `(${this.escapeRegex(modelName)}\\s+(?:XL[TS]?|Limited|Titanium|Lariat|Black|Tremor|Raptor|Wildtrak|Sport|SEL|ST)[^\\n]{0,40})`,
+      `(${this.escapeRegex(modelName)}\\s+(?:XL[TS]?|Limited|Titanium|Lariat|Black|Tremor|Raptor|Wildtrak|Sport|SEL|ST))([^\\n]*)`,
       'gi',
     );
     const fullText = lines.join('\n');
     const matches = fullText.matchAll(versionPattern);
     for (const m of matches) {
-      const clean = m[1].trim().replace(/\s{2,}/g, ' ');
-      if (clean.length < 80) versions.add(clean);
+      const head = m[1].trim().replace(/\s{2,}/g, ' ');
+      // Only fold in further words from the same PDF line while they read like
+      // trim/spec tokens (ALL CAPS, e.g. "CHROME", "BADLANDS"); the first
+      // lowercase-led word marks the start of marketing prose sharing the line.
+      const extraWords: string[] = [];
+      for (const word of m[2].trim().split(/\s+/).filter(Boolean)) {
+        if (/^[A-ZÀ-Ú0-9][A-ZÀ-Ú0-9-]{0,14}$/.test(word)) {
+          extraWords.push(word);
+        } else {
+          break;
+        }
+      }
+      const clean = [head, ...extraWords].join(' ').trim();
+      if (clean.length === 0 || clean.length >= 80) continue;
+      const key = clean.replace(/\s+/g, '').toUpperCase();
+      if (!seen.has(key)) seen.set(key, clean);
     }
-    return [...versions];
+    return [...seen.values()];
   }
 
   private extractColors(lines: string[]): string[] {

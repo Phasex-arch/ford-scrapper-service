@@ -15,6 +15,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { JwtAuthGuard } from './auth/infrastructure/guards/jwt-auth.guard.js';
 
 import { ColaboradorModule } from './colaborador/colaborador.module.js';
+import { AgendamentoModule } from './agendamento/agendamento.module.js';
 import { AvaliacaoModule } from './avaliacao/avaliacao.module.js';
 import { ClienteModule } from './cliente/cliente.module.js';
 import { EstoqueModule } from './estoque/estoque.module.js';
@@ -24,6 +25,7 @@ import { MetaModule } from './meta/meta.module.js';
 import { ServicoModule } from './servico/servico.module.js';
 import { TecnicoModule } from './tecnico/tecnico.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
+import { VeiculoClienteModule } from './veiculo-cliente/veiculo-cliente.module.js';
 
 @Module({
   imports: [
@@ -36,6 +38,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     AuthModule,
 
     ColaboradorModule,
+    AgendamentoModule,
     AvaliacaoModule,
     ClienteModule,
     EstoqueModule,
@@ -45,6 +48,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     ServicoModule,
     TecnicoModule,
     DashboardModule,
+    VeiculoClienteModule,
 
     ScrapperModule,
     VehicleModule,

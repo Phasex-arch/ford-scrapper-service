@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiParam,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -28,13 +29,11 @@ import {
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
-import {
-  buildPaginationMeta,
-  PaginationQueryDto,
-} from '../../common/dto/pagination.dto.js';
+import { buildPaginationMeta } from '../../common/dto/pagination.dto.js';
 import { EstoqueService } from '../application/estoque.service.js';
 import { CreateEstoqueDto } from '../application/dto/create-estoque.dto.js';
 import { UpdateEstoqueDto } from '../application/dto/update-estoque.dto.js';
+import { ListEstoqueQueryDto } from '../application/dto/list-estoque-query.dto.js';
 
 @ApiTags('Estoque')
 @ApiBearerAuth()
@@ -50,30 +49,24 @@ export class EstoqueController {
   @ApiQuery({ name: 'condicao', required: false, enum: CondicaoVeiculo })
   @ApiQuery({ name: 'segmento', required: false, enum: SegmentoVeiculo })
   @ApiQuery({ name: 'modelo', required: false })
+  @ApiQuery({ name: 'search', required: false, description: 'Busca livre em modelo, versão, cor e código' })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'precoMin', required: false, type: Number })
   @ApiQuery({ name: 'precoMax', required: false, type: Number })
-  @ApiResponse({ status: 200 })
-  async list(
-    @Query() pagination: PaginationQueryDto,
-    @Query('condicao') condicao?: CondicaoVeiculo,
-    @Query('segmento') segmento?: SegmentoVeiculo,
-    @Query('modelo') modelo?: string,
-    @Query('status') status?: string,
-    @Query('precoMin') precoMin?: string,
-    @Query('precoMax') precoMax?: string,
-  ) {
-    const page = pagination.page ?? 1;
-    const limit = pagination.limit ?? 20;
+  @ApiResponse({ status: 200, description: 'Lista paginada de itens de estoque' })
+  async list(@Query() query: ListEstoqueQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const { data, total } = await this.service.list({
       page,
       limit,
-      condicao,
-      segmento,
-      modelo,
-      status,
-      precoMin: precoMin ? Number(precoMin) : undefined,
-      precoMax: precoMax ? Number(precoMax) : undefined,
+      condicao: query.condicao,
+      segmento: query.segmento,
+      modelo: query.modelo,
+      search: query.search,
+      status: query.status,
+      precoMin: query.precoMin,
+      precoMax: query.precoMax,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),
@@ -84,6 +77,8 @@ export class EstoqueController {
   @Get(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
   @ApiOperation({ summary: 'Buscar item por UUID' })
+  @ApiParam({ name: 'uuid', description: 'UUID do item de estoque', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Item de estoque encontrado' })
   findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.findById(uuid);
   }
@@ -91,6 +86,7 @@ export class EstoqueController {
   @Post()
   @Roles(Role.ADMIN, Role.GERENTE)
   @ApiOperation({ summary: 'Criar item de estoque' })
+  @ApiResponse({ status: 201, description: 'Item de estoque criado' })
   create(@Body() dto: CreateEstoqueDto) {
     return this.service.create(dto);
   }
@@ -98,6 +94,8 @@ export class EstoqueController {
   @Patch(':uuid')
   @Roles(Role.ADMIN, Role.GERENTE)
   @ApiOperation({ summary: 'Atualizar item de estoque' })
+  @ApiParam({ name: 'uuid', description: 'UUID do item de estoque', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Item de estoque atualizado' })
   update(
     @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateEstoqueDto,
@@ -109,6 +107,8 @@ export class EstoqueController {
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remover item de estoque (ADMIN)' })
+  @ApiParam({ name: 'uuid', description: 'UUID do item de estoque', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Item de estoque removido' })
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
   }

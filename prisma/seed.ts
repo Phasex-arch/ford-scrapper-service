@@ -43,6 +43,18 @@ function parseDataBr(data: string): Date | null {
   return new Date(`${yyyy}-${mm}-${dd}T12:00:00Z`);
 }
 
+const MESES_ABREV: Record<string, string> = {
+  Jan: '01', Fev: '02', Mar: '03', Abr: '04', Mai: '05', Jun: '06',
+  Jul: '07', Ago: '08', Set: '09', Out: '10', Nov: '11', Dez: '12',
+};
+
+function parseMesAno(data: string): Date {
+  const [mes, ano] = data.split(' ');
+  const mm = MESES_ABREV[mes];
+  if (!mm) throw new Error(`Mes invalido no seed: "${data}"`);
+  return new Date(`${ano}-${mm}-01T12:00:00Z`);
+}
+
 function log(section: string, msg: string): void {
   console.log(`  [${section}] ${msg}`);
 }
@@ -215,6 +227,64 @@ async function seedClientes(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Veiculos por cliente (historico de posse)
+// ---------------------------------------------------------------------------
+
+interface VeiculoClienteSeed {
+  codigo: string;
+  clienteCodigo: string;
+  modelo: string;
+  versao: string;
+  ano: string;
+  cor: string;
+  km: string;
+  precoAquisicao: number;
+  dataAquisicao: string;
+  dataSaida: string | null;
+  status: 'ATIVO' | 'VENDIDO' | 'SUBSTITUIDO';
+  atual: boolean;
+}
+
+const VEICULOS_CLIENTE_SEED: VeiculoClienteSeed[] = [
+  { codigo: 'VC001A', clienteCodigo: 'C001', modelo: 'Ford Bronco Sport', versao: 'Badlands 2.0 EcoBoost AT6', ano: '2024/2024', cor: 'Azul Arizona',     km: '12.450', precoAquisicao: 189900, dataAquisicao: 'Mar 2024', dataSaida: null,      status: 'ATIVO',       atual: true  },
+  { codigo: 'VC001B', clienteCodigo: 'C001', modelo: 'Ford Ranger Storm', versao: '3.0 V6 Diesel 4x4 AT10',   ano: '2022/2022', cor: 'Cinza Magnetico',   km: '48.200', precoAquisicao: 248000, dataAquisicao: 'Mai 2022', dataSaida: 'Mar 2024', status: 'VENDIDO',     atual: false },
+  { codigo: 'VC001C', clienteCodigo: 'C001', modelo: 'Ford Ka Sedan',     versao: 'SE 1.5 Flex',              ano: '2019/2020', cor: 'Branco Artico',     km: '92.100', precoAquisicao: 68900,  dataAquisicao: 'Fev 2020', dataSaida: 'Mai 2022', status: 'SUBSTITUIDO', atual: false },
+  { codigo: 'VC002A', clienteCodigo: 'C002', modelo: 'Ford Territory Titanium', versao: '1.5 EcoBoost AT7',   ano: '2026/2026', cor: 'Branco Platinum',   km: '3.200',  precoAquisicao: 179900, dataAquisicao: 'Jan 2026', dataSaida: null,      status: 'ATIVO',       atual: true  },
+  { codigo: 'VC002B', clienteCodigo: 'C002', modelo: 'Ford Maverick Hybrid', versao: 'XLT FWD 2.5 Hybrid',    ano: '2022/2022', cor: 'Azul Stellar',      km: '54.800', precoAquisicao: 169900, dataAquisicao: 'Jun 2022', dataSaida: 'Dez 2024', status: 'VENDIDO',     atual: false },
+  { codigo: 'VC004A', clienteCodigo: 'C004', modelo: 'Ford Bronco Sport', versao: 'Outer Banks 2.0 EcoBoost', ano: '2023/2024', cor: 'Cactus Gray',       km: '22.100', precoAquisicao: 184900, dataAquisicao: 'Dez 2023', dataSaida: null,      status: 'ATIVO',       atual: true  },
+  { codigo: 'VC007A', clienteCodigo: 'C007', modelo: 'Ford Bronco Sport', versao: 'Wildtrak 2.0 EcoBoost',    ano: '2024/2024', cor: 'Eruption Green',    km: '8.900',  precoAquisicao: 194900, dataAquisicao: 'Ago 2024', dataSaida: null,      status: 'ATIVO',       atual: true  },
+];
+
+async function seedVeiculosCliente(): Promise<void> {
+  for (const v of VEICULOS_CLIENTE_SEED) {
+    const cliente = await prisma.cliente.findUnique({ where: { codigo: v.clienteCodigo } });
+    if (!cliente) {
+      log('VEICULOS_CLIENTE', `Cliente ${v.clienteCodigo} nao encontrado, pulando ${v.codigo}`);
+      continue;
+    }
+    await prisma.veiculoCliente.upsert({
+      where: { codigo: v.codigo },
+      update: {},
+      create: {
+        codigo: v.codigo,
+        clienteId: cliente.id,
+        modelo: v.modelo,
+        versao: v.versao,
+        ano: v.ano,
+        cor: v.cor,
+        km: v.km,
+        precoAquisicao: v.precoAquisicao,
+        dataAquisicao: parseMesAno(v.dataAquisicao),
+        dataSaida: v.dataSaida ? parseMesAno(v.dataSaida) : null,
+        status: v.status,
+        atual: v.atual,
+      },
+    });
+  }
+  log('VEICULOS_CLIENTE', `${VEICULOS_CLIENTE_SEED.length} veiculos de clientes`);
+}
+
+// ---------------------------------------------------------------------------
 // Estoque
 // ---------------------------------------------------------------------------
 
@@ -363,18 +433,18 @@ async function seedAvaliacoes(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const ORDENS_SEED = [
-  { numero: '#4831', cliente: 'Carlos Mendes',    veiculo: 'Bronco Sport 2024',  tipo: 'Revisao 20.000 km',                tecnico: 'Andre Souza',    prazo: 'Hoje, 14:00',   prioridade: 'RISCO',    valor: 'R$ 1.840', status: 'PREVISTO' },
-  { numero: '#4832', cliente: 'Ana Rodrigues',    veiculo: 'Territory 2023',     tipo: 'Alinhamento + balanceamento',      tecnico: 'Eduardo Lima',   prazo: 'Hoje, 16:00',   prioridade: 'OK',       valor: 'R$ 480',   status: 'PREVISTO' },
-  { numero: '#4833', cliente: 'Fernanda Costa',   veiculo: 'Ranger Storm 2022',  tipo: 'Revisao 30.000 km',                tecnico: 'Andre Souza',    prazo: 'Amanha, 09:00', prioridade: 'OK',       valor: 'R$ 3.200', status: 'PREVISTO' },
-  { numero: '#4834', cliente: 'Paulo Almeida',    veiculo: 'Maverick 2024',      tipo: 'Troca de pneus',                    tecnico: 'Marcos Vieira',  prazo: 'Amanha, 11:00', prioridade: 'OK',       valor: 'R$ 2.100', status: 'PREVISTO' },
-  { numero: '#4835', cliente: 'Beatriz Neves',    veiculo: 'Ka Sedan 2021',      tipo: 'Revisao 15.000 km',                tecnico: 'Eduardo Lima',   prazo: '22/04, 09:00',  prioridade: 'OK',       valor: 'R$ 1.100', status: 'PREVISTO' },
-  { numero: '#4821', cliente: 'Juliana Cardoso',  veiculo: 'Territory SE 2023',  tipo: 'Reparo eletrico - Sensor airbag',  tecnico: 'Bruna Castro',   prazo: 'Hoje, 12:00',   prioridade: 'ATRASADO', valor: 'R$ 2.400', status: 'ANDAMENTO' },
-  { numero: '#4822', cliente: 'Marcelo Pires',    veiculo: 'Ecosport 2020',      tipo: 'Funilaria - Porta dianteira',      tecnico: 'Diego Ferreira', prazo: 'Hoje, 15:00',   prioridade: 'RISCO',    valor: 'R$ 4.200', status: 'ANDAMENTO' },
-  { numero: '#4823', cliente: 'Alexandre Torres', veiculo: 'Ranger Storm 2022',  tipo: 'Substituicao de correias',         tecnico: 'Andre Souza',    prazo: 'Hoje, 17:00',   prioridade: 'OK',       valor: 'R$ 1.900', status: 'ANDAMENTO' },
-  { numero: '#4810', cliente: 'Jose Melo',        veiculo: 'Ka Sedan 2020',      tipo: 'Revisao 60.000 km',                tecnico: 'Andre Souza',    prazo: 'Ontem',         prioridade: 'OK',       valor: 'R$ 2.100', status: 'CONCLUIDO' },
-  { numero: '#4811', cliente: 'Mariana Silva',    veiculo: 'Territory 2022',     tipo: 'Alinhamento e balanceamento',      tecnico: 'Eduardo Lima',   prazo: 'Ontem',         prioridade: 'OK',       valor: 'R$ 480',   status: 'CONCLUIDO' },
-  { numero: '#4812', cliente: 'Paulo Almeida',    veiculo: 'Bronco Sport 2024',  tipo: 'Revisao 10.000 km',                tecnico: 'Marcos Vieira',  prazo: 'Ontem',         prioridade: 'OK',       valor: 'R$ 1.240', status: 'CONCLUIDO' },
-  { numero: '#4813', cliente: 'Fernanda Costa',   veiculo: 'Maverick 2024',      tipo: 'Instalacao de acessorios',         tecnico: 'Diego Ferreira', prazo: 'Ontem',         prioridade: 'OK',       valor: 'R$ 3.800', status: 'CONCLUIDO' },
+  { numero: '#4831', cliente: 'Carlos Mendes',    veiculo: 'Bronco Sport 2024',  tipo: 'Revisao 20.000 km',                tecnico: 'Andre Souza',    prazo: 'Hoje, 14:00',   prioridade: 'RISCO',    valor: 1840, status: 'PREVISTO' },
+  { numero: '#4832', cliente: 'Ana Rodrigues',    veiculo: 'Territory 2023',     tipo: 'Alinhamento + balanceamento',      tecnico: 'Eduardo Lima',   prazo: 'Hoje, 16:00',   prioridade: 'OK',       valor: 480,   status: 'PREVISTO' },
+  { numero: '#4833', cliente: 'Fernanda Costa',   veiculo: 'Ranger Storm 2022',  tipo: 'Revisao 30.000 km',                tecnico: 'Andre Souza',    prazo: 'Amanha, 09:00', prioridade: 'OK',       valor: 3200, status: 'PREVISTO' },
+  { numero: '#4834', cliente: 'Paulo Almeida',    veiculo: 'Maverick 2024',      tipo: 'Troca de pneus',                    tecnico: 'Marcos Vieira',  prazo: 'Amanha, 11:00', prioridade: 'OK',       valor: 2100, status: 'PREVISTO' },
+  { numero: '#4835', cliente: 'Beatriz Neves',    veiculo: 'Ka Sedan 2021',      tipo: 'Revisao 15.000 km',                tecnico: 'Eduardo Lima',   prazo: '22/04, 09:00',  prioridade: 'OK',       valor: 1100, status: 'PREVISTO' },
+  { numero: '#4821', cliente: 'Juliana Cardoso',  veiculo: 'Territory SE 2023',  tipo: 'Reparo eletrico - Sensor airbag',  tecnico: 'Bruna Castro',   prazo: 'Hoje, 12:00',   prioridade: 'ATRASADO', valor: 2400, status: 'ANDAMENTO' },
+  { numero: '#4822', cliente: 'Marcelo Pires',    veiculo: 'Ecosport 2020',      tipo: 'Funilaria - Porta dianteira',      tecnico: 'Diego Ferreira', prazo: 'Hoje, 15:00',   prioridade: 'RISCO',    valor: 4200, status: 'ANDAMENTO' },
+  { numero: '#4823', cliente: 'Alexandre Torres', veiculo: 'Ranger Storm 2022',  tipo: 'Substituicao de correias',         tecnico: 'Andre Souza',    prazo: 'Hoje, 17:00',   prioridade: 'OK',       valor: 1900, status: 'ANDAMENTO' },
+  { numero: '#4810', cliente: 'Jose Melo',        veiculo: 'Ka Sedan 2020',      tipo: 'Revisao 60.000 km',                tecnico: 'Andre Souza',    prazo: 'Ontem',         prioridade: 'OK',       valor: 2100, status: 'CONCLUIDO' },
+  { numero: '#4811', cliente: 'Mariana Silva',    veiculo: 'Territory 2022',     tipo: 'Alinhamento e balanceamento',      tecnico: 'Eduardo Lima',   prazo: 'Ontem',         prioridade: 'OK',       valor: 480,   status: 'CONCLUIDO' },
+  { numero: '#4812', cliente: 'Paulo Almeida',    veiculo: 'Bronco Sport 2024',  tipo: 'Revisao 10.000 km',                tecnico: 'Marcos Vieira',  prazo: 'Ontem',         prioridade: 'OK',       valor: 1240, status: 'CONCLUIDO' },
+  { numero: '#4813', cliente: 'Fernanda Costa',   veiculo: 'Maverick 2024',      tipo: 'Instalacao de acessorios',         tecnico: 'Diego Ferreira', prazo: 'Ontem',         prioridade: 'OK',       valor: 3800, status: 'CONCLUIDO' },
 ] as const;
 
 async function seedOrdens(): Promise<void> {
@@ -389,6 +459,37 @@ async function seedOrdens(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Agendamentos
+// ---------------------------------------------------------------------------
+
+/** Horarios de hoje (hora, minuto) com cliente/servico/tecnico realistas. */
+const AGENDAMENTOS_SEED_HOJE: { hora: number; minuto: number; cliente: string; servico: string; tecnico: string }[] = [
+  { hora: 7, minuto: 30, cliente: 'Carlos Mendes', servico: 'Revisao 10.000 km', tecnico: 'Andre Souza' },
+  { hora: 8, minuto: 0, cliente: 'Ana Rodrigues', servico: 'Alinhamento', tecnico: 'Eduardo Lima' },
+  { hora: 9, minuto: 0, cliente: 'Fernanda Costa', servico: 'Revisao 30.000 km', tecnico: 'Andre Souza' },
+  { hora: 10, minuto: 30, cliente: 'Juliana Cardoso', servico: 'OS URGENTE - Eletrico', tecnico: 'Bruna Castro' },
+  { hora: 12, minuto: 0, cliente: 'Beatriz Neves', servico: 'Revisao 15.000 km', tecnico: 'Eduardo Lima' },
+];
+
+async function seedAgendamentos(): Promise<void> {
+  const existing = await prisma.agendamento.count();
+  if (existing > 0) {
+    log('AGENDAMENTOS', `ja existem ${existing} (skip)`);
+    return;
+  }
+  const hoje = new Date();
+  await prisma.agendamento.createMany({
+    data: AGENDAMENTOS_SEED_HOJE.map((a) => ({
+      cliente: a.cliente,
+      servico: a.servico,
+      tecnico: a.tecnico,
+      dataHora: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), a.hora, a.minuto),
+    })),
+  });
+  log('AGENDAMENTOS', `${AGENDAMENTOS_SEED_HOJE.length} agendamentos`);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -399,12 +500,14 @@ async function main(): Promise<void> {
   await seedColaboradores();
   await seedTecnicos();
   await seedClientes();
+  await seedVeiculosCliente();
   await seedEstoque();
   await seedLeads();
   await seedFinanciamentos();
   await seedMetas();
   await seedAvaliacoes();
   await seedOrdens();
+  await seedAgendamentos();
 
   console.log('\nSeed concluido com sucesso.');
 }

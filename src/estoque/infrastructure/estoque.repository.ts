@@ -13,6 +13,7 @@ export interface EstoqueListFilter {
   condicao?: CondicaoVeiculo;
   segmento?: SegmentoVeiculo;
   modelo?: string;
+  search?: string;
   precoMin?: number;
   precoMax?: number;
   status?: string;
@@ -65,6 +66,15 @@ export class EstoqueRepository {
     if (filter.status) where.status = filter.status;
     if (filter.modelo) {
       where.modelo = { contains: filter.modelo, mode: 'insensitive' };
+    }
+    if (filter.search && filter.search.trim()) {
+      const q = filter.search.trim();
+      where.OR = [
+        { modelo: { contains: q, mode: 'insensitive' } },
+        { versao: { contains: q, mode: 'insensitive' } },
+        { cor: { contains: q, mode: 'insensitive' } },
+        { codigo: { contains: q, mode: 'insensitive' } },
+      ];
     }
     if (filter.precoMin !== undefined || filter.precoMax !== undefined) {
       const preco: Record<string, number> = {};

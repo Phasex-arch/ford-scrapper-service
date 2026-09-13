@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -76,4 +77,11 @@ export class CreateFinanciamentoDto {
   @IsString()
   @MaxLength(20)
   data!: string;
+
+  @ApiPropertyOptional({
+    description: 'UUID do lead que originou este financiamento, usado para calcular conversão',
+  })
+  @IsOptional()
+  @IsUUID()
+  leadId?: string;
 }

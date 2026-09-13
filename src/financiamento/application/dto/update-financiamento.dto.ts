@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -75,4 +76,11 @@ export class UpdateFinanciamentoDto {
   @IsString()
   @MaxLength(20)
   data?: string;
+
+  @ApiPropertyOptional({
+    description: 'UUID do lead que originou este financiamento, usado para calcular conversão',
+  })
+  @IsOptional()
+  @IsUUID()
+  leadId?: string;
 }
