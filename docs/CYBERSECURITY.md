@@ -130,7 +130,7 @@ flowchart LR
 | Endpoints públicos sem PII           | Avaliações públicas e health check não exigem identificação.                                                                                                    |
 | Retenção LGPD                        | `Cliente` e `Lead` têm `updatedAt`/`createdAt`. Cron para anonimizar registros com > 730 dias previsto (ver Appendix C).                                       |
 | Acesso ao Postgres                   | `DATABASE_URL` única. Em ambientes gerenciados (RDS / Prisma Postgres), TLS obrigatório.                                                                       |
-| Backup                               | Responsabilidade do provedor gerenciado; self-hosted: `pg_basebackup` + `gpg`.                                                                                  |
+| Backup                               | `scripts/backup-db.sh` (`pg_dump` comprimido, retenção de 14 dias) agendado via cron do host, diário. Restore em `scripts/restore-db.sh`. Ver `docs/OPERACAO.md`. |
 
 ---
 
