@@ -27,6 +27,7 @@ import { ServicoModule } from './servico/servico.module.js';
 import { TecnicoModule } from './tecnico/tecnico.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { VeiculoClienteModule } from './veiculo-cliente/veiculo-cliente.module.js';
+import { AuditLogModule } from './audit-log/audit-log.module.js';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { VeiculoClienteModule } from './veiculo-cliente/veiculo-cliente.module.j
     TecnicoModule,
     DashboardModule,
     VeiculoClienteModule,
+    AuditLogModule,
 
     ScrapperModule,
     VehicleModule,
