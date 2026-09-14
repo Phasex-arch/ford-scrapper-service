@@ -288,38 +288,51 @@ async function seedVeiculosCliente(): Promise<void> {
 // Estoque
 // ---------------------------------------------------------------------------
 
+// URLs reais, raspadas do catalogo oficial Ford Brasil pelo proprio scraper
+// (tabela Vehicle/Imagem) — nunca inventar URL de imagem.
+const IMG_BRONCO_SPORT = 'https://www.ford.com.br/content/dam/Ford/website-assets/latam/br/nameplate/2026/bronco-sport/overview/billboard/fbr-ford-nameplate-billboard-bronco-sport.jpg';
+const IMG_RANGER = 'https://www.ford.com.br/content/dam/Ford/website-assets/latam/br/nameplate/2025/nova-geracao-ranger/models/black-2-0-diesel-4x2-at/billboard/fbr-billboard-home-ranger-black.jpg';
+const IMG_MAVERICK = 'https://www.ford.com.br/content/dam/Ford/website-assets/latam/br/nameplate/2025/maverick/overview/billboards/fbr-maverick-black-bb-3.jpg';
+const IMG_TERRITORY = 'https://www.ford.com.br/content/dam/Ford/website-assets/latam/br/nameplate/2026/territory/colorizer/azul-profundo/fbr-territory-colorizer-azul-profundo.jpg.dam.full.high.jpg/1751981266379.jpg';
+const IMG_MUSTANG = 'https://www.ford.com.br/content/dam/Ford/website-assets/latam/br/nameplate/2025/mustang-dark-horse/overview/colorizer/azul-algarve/fbr-mustang-dark-horse-azul-algarve.jpg.dam.full.high.jpg/1755149716154.jpg';
+
 const ESTOQUE_SEED = [
-  { codigo: 'E001', modelo: 'Ford Bronco Sport',     versao: 'Badlands 2.0 EcoBoost AT6',  ano: '2026', motor: '2.0 EcoBoost 250 cv', transmissao: 'Automatico 6 vel.',  condicao: 'NOVO',     status: 'Disponivel', preco: 209900, segmento: 'SUV',    cor: 'Azul Arizona',     quantidade: 4, km: null,         opcionais: ['Teto panoramico', 'Camera 360', 'Bancos em couro', 'Apple CarPlay'] },
-  { codigo: 'E002', modelo: 'Ford Ranger Storm',     versao: '3.0 V6 Diesel 4x4 AT10',     ano: '2026', motor: '3.0 TDCi V6 250 cv',  transmissao: 'Automatico 10 vel.', condicao: 'NOVO',     status: 'Disponivel', preco: 299900, segmento: 'PICAPE', cor: 'Cinza Magnetico',  quantidade: 2, km: null,         opcionais: ['Pacote Off-Road', 'SYNC 4', 'Camera 360', 'Rodas 18'] },
-  { codigo: 'E003', modelo: 'Ford Maverick Hybrid',  versao: 'XLT FWD 2.5 Hybrid',         ano: '2026', motor: '2.5 Hybrid 190 cv',   transmissao: 'CVT',                condicao: 'NOVO',     status: 'Disponivel', preco: 189900, segmento: 'PICAPE', cor: 'Azul Stellar',     quantidade: 2, km: null,         opcionais: ['FordPass Connect', 'SYNC 4', 'Bandeja de carga'] },
-  { codigo: 'E004', modelo: 'Ford Territory Titanium', versao: '1.5 EcoBoost AT7',         ano: '2026', motor: '1.5 EcoBoost 150 cv', transmissao: 'Automatico 7 vel.',  condicao: 'NOVO',     status: 'Reservado',  preco: 179900, segmento: 'SUV',    cor: 'Branco Platinum',  quantidade: 1, km: null,         opcionais: ['Teto solar', 'Ambient Light', 'Driver Assistance Pack'] },
-  { codigo: 'E005', modelo: 'Ford Ranger XLS',       versao: '2.2 Diesel 4x4 MT6',         ano: '2024', motor: '2.2 TDCi 158 cv',     transmissao: 'Manual 6 vel.',      condicao: 'NOVO',     status: 'Disponivel', preco: 219900, segmento: 'PICAPE', cor: 'Vermelho Race Red',quantidade: 6, km: null,         opcionais: ['Controle de tracao', 'Camera traseira'] },
-  { codigo: 'E006', modelo: 'Ford Mustang GT',       versao: '5.0 V8 Fastback',            ano: '2024', motor: '5.0 V8 450 cv',       transmissao: 'Manual 6 vel.',      condicao: 'SEMINOVO', status: 'Disponivel', preco: 389900, segmento: 'SEDAN',  cor: 'Azul Grabber',     quantidade: 1, km: '18.400 km',  opcionais: ['Pacote Pony', 'Launch Control', 'Performance Exhaust'] },
-  { codigo: 'E007', modelo: 'Ford Bronco Sport',     versao: 'Big Bend 2.0 AT6',           ano: '2024', motor: '2.0 EcoBoost 197 cv', transmissao: 'Automatico 6 vel.',  condicao: 'SEMINOVO', status: 'Disponivel', preco: 174900, segmento: 'SUV',    cor: 'Area 51 (Verde)',  quantidade: 1, km: '24.800 km',  opcionais: ['SYNC 3', 'Camera traseira', 'Sensores de estacionamento'] },
-  { codigo: 'E008', modelo: 'Ford Territory SE',     versao: '1.5 EcoBoost AT7',           ano: '2023', motor: '1.5 EcoBoost 150 cv', transmissao: 'Automatico 7 vel.',  condicao: 'SEMINOVO', status: 'Disponivel', preco: 149900, segmento: 'SUV',    cor: 'Cinza Magnetic',   quantidade: 1, km: '31.200 km',  opcionais: ['SYNC 3', 'Camera traseira'] },
+  { codigo: 'E001', modelo: 'Ford Bronco Sport',     versao: 'Badlands 2.0 EcoBoost AT6',  ano: '2026', motor: '2.0 EcoBoost 250 cv', transmissao: 'Automatico 6 vel.',  condicao: 'NOVO',     status: 'Disponivel', preco: 209900, segmento: 'SUV',    cor: 'Azul Arizona',     quantidade: 4, km: null,         opcionais: ['Teto panoramico', 'Camera 360', 'Bancos em couro', 'Apple CarPlay'], imagem: IMG_BRONCO_SPORT },
+  { codigo: 'E002', modelo: 'Ford Ranger Storm',     versao: '3.0 V6 Diesel 4x4 AT10',     ano: '2026', motor: '3.0 TDCi V6 250 cv',  transmissao: 'Automatico 10 vel.', condicao: 'NOVO',     status: 'Disponivel', preco: 299900, segmento: 'PICAPE', cor: 'Cinza Magnetico',  quantidade: 2, km: null,         opcionais: ['Pacote Off-Road', 'SYNC 4', 'Camera 360', 'Rodas 18'], imagem: IMG_RANGER },
+  { codigo: 'E003', modelo: 'Ford Maverick Hybrid',  versao: 'XLT FWD 2.5 Hybrid',         ano: '2026', motor: '2.5 Hybrid 190 cv',   transmissao: 'CVT',                condicao: 'NOVO',     status: 'Disponivel', preco: 189900, segmento: 'PICAPE', cor: 'Azul Stellar',     quantidade: 2, km: null,         opcionais: ['FordPass Connect', 'SYNC 4', 'Bandeja de carga'], imagem: IMG_MAVERICK },
+  { codigo: 'E004', modelo: 'Ford Territory Titanium', versao: '1.5 EcoBoost AT7',         ano: '2026', motor: '1.5 EcoBoost 150 cv', transmissao: 'Automatico 7 vel.',  condicao: 'NOVO',     status: 'Reservado',  preco: 179900, segmento: 'SUV',    cor: 'Branco Platinum',  quantidade: 1, km: null,         opcionais: ['Teto solar', 'Ambient Light', 'Driver Assistance Pack'], imagem: IMG_TERRITORY },
+  { codigo: 'E005', modelo: 'Ford Ranger XLS',       versao: '2.2 Diesel 4x4 MT6',         ano: '2024', motor: '2.2 TDCi 158 cv',     transmissao: 'Manual 6 vel.',      condicao: 'NOVO',     status: 'Disponivel', preco: 219900, segmento: 'PICAPE', cor: 'Vermelho Race Red',quantidade: 6, km: null,         opcionais: ['Controle de tracao', 'Camera traseira'], imagem: IMG_RANGER },
+  { codigo: 'E006', modelo: 'Ford Mustang GT',       versao: '5.0 V8 Fastback',            ano: '2024', motor: '5.0 V8 450 cv',       transmissao: 'Manual 6 vel.',      condicao: 'SEMINOVO', status: 'Disponivel', preco: 389900, segmento: 'SEDAN',  cor: 'Azul Grabber',     quantidade: 1, km: '18.400 km',  opcionais: ['Pacote Pony', 'Launch Control', 'Performance Exhaust'], imagem: IMG_MUSTANG },
+  { codigo: 'E007', modelo: 'Ford Bronco Sport',     versao: 'Big Bend 2.0 AT6',           ano: '2024', motor: '2.0 EcoBoost 197 cv', transmissao: 'Automatico 6 vel.',  condicao: 'SEMINOVO', status: 'Disponivel', preco: 174900, segmento: 'SUV',    cor: 'Area 51 (Verde)',  quantidade: 1, km: '24.800 km',  opcionais: ['SYNC 3', 'Camera traseira', 'Sensores de estacionamento'], imagem: IMG_BRONCO_SPORT },
+  { codigo: 'E008', modelo: 'Ford Territory SE',     versao: '1.5 EcoBoost AT7',           ano: '2023', motor: '1.5 EcoBoost 150 cv', transmissao: 'Automatico 7 vel.',  condicao: 'SEMINOVO', status: 'Disponivel', preco: 149900, segmento: 'SUV',    cor: 'Cinza Magnetic',   quantidade: 1, km: '31.200 km',  opcionais: ['SYNC 3', 'Camera traseira'], imagem: IMG_TERRITORY },
 ] as const;
 
 async function seedEstoque(): Promise<void> {
   for (const e of ESTOQUE_SEED) {
+    const data = {
+      modelo: e.modelo,
+      versao: e.versao,
+      ano: e.ano,
+      motor: e.motor,
+      transmissao: e.transmissao,
+      condicao: e.condicao,
+      status: e.status,
+      preco: e.preco,
+      segmento: e.segmento,
+      cor: e.cor,
+      quantidade: e.quantidade,
+      km: e.km,
+      opcionais: [...e.opcionais],
+      imagem: e.imagem,
+    };
     await prisma.estoqueVeiculo.upsert({
       where: { codigo: e.codigo },
-      update: {},
-      create: {
-        codigo: e.codigo,
-        modelo: e.modelo,
-        versao: e.versao,
-        ano: e.ano,
-        motor: e.motor,
-        transmissao: e.transmissao,
-        condicao: e.condicao,
-        status: e.status,
-        preco: e.preco,
-        segmento: e.segmento,
-        cor: e.cor,
-        quantidade: e.quantidade,
-        km: e.km,
-        opcionais: [...e.opcionais],
-      },
+      // Ao contrário dos outros upserts do seed, aqui vale atualizar de
+      // verdade em cima de um registro já existente — foi assim que a
+      // imagem ficou faltando em produção na primeira rodada (upsert com
+      // update:{} nunca revisita quem já existe).
+      update: data,
+      create: { codigo: e.codigo, ...data },
     });
   }
   log('ESTOQUE', `${ESTOQUE_SEED.length} veiculos`);

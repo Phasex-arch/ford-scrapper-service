@@ -43,9 +43,9 @@ services:
         sync: false
       - key: ADMIN_SENHA # openssl rand -base64 18
         sync: false
-      - key: GMAIL_USER
+      - key: BREVO_API_KEY # app.brevo.com/settings/keys/api
         sync: false
-      - key: GMAIL_APP_PASSWORD # gerada em myaccount.google.com/apppasswords
+      - key: BREVO_SENDER_EMAIL # precisa estar verificado em app.brevo.com/senders
         sync: false
       - key: GEMINI_KEY # aistudio.google.com/app/apikey
         sync: false

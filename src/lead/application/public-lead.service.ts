@@ -6,10 +6,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
-import nodemailer from 'nodemailer';
 import { LeadUrgencia } from '../../../generated/prisma/enums.js';
 import { LeadRepository } from '../infrastructure/lead.repository.js';
 import type { CreatePublicLeadDto } from './dto/create-public-lead.dto.js';
+
+interface BrevoErrorResponse {
+  message?: string;
+}
 
 @Injectable()
 export class PublicLeadService {
@@ -21,9 +24,9 @@ export class PublicLeadService {
   ) {}
 
   async create(dto: CreatePublicLeadDto) {
-    const gmailUser = this.config.get<string>('GMAIL_USER');
-    const gmailAppPassword = this.config.get<string>('GMAIL_APP_PASSWORD');
-    if (!gmailUser || !gmailAppPassword) {
+    const brevoApiKey = this.config.get<string>('BREVO_API_KEY');
+    const brevoSenderEmail = this.config.get<string>('BREVO_SENDER_EMAIL');
+    if (!brevoApiKey || !brevoSenderEmail) {
       throw new ServiceUnavailableException(
         'Contato indisponivel: envio de confirmacao nao configurado',
       );
@@ -50,7 +53,7 @@ export class PublicLeadService {
     }
 
     try {
-      await this.sendConfirmation({ gmailUser, gmailAppPassword, dto });
+      await this.sendConfirmation({ brevoApiKey, brevoSenderEmail, dto });
     } catch (error) {
       this.logger.error(`Falha ao confirmar lead ${lead.id} por email`, error);
       throw new ServiceUnavailableException(
@@ -63,35 +66,46 @@ export class PublicLeadService {
 
   /**
    * Confirmação enviada direto pra quem preencheu o formulário — não pra
-   * concessionária. Usa Gmail SMTP (não Resend): sem domínio próprio
-   * verificado, o Resend só entrega pro dono da conta, o que inviabilizaria
-   * confirmar o recebimento pra clientes de verdade.
+   * concessionária. Usa a API HTTP do Brevo (porta 443), não SMTP: o Render
+   * bloqueia toda porta de saída SMTP (25/465/587) no tier gratuito desde
+   * set/2025, então Gmail SMTP e qualquer outro provedor via SMTP nunca
+   * entregariam em produção — só trava até estourar timeout. Brevo verifica
+   * um único remetente por clique de link (sem precisar de domínio) e entrega
+   * pra qualquer destinatário, diferente do Resend em modo sandbox.
    */
   private async sendConfirmation(input: {
-    gmailUser: string;
-    gmailAppPassword: string;
+    brevoApiKey: string;
+    brevoSenderEmail: string;
     dto: CreatePublicLeadDto;
   }): Promise<void> {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: input.gmailUser, pass: input.gmailAppPassword },
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': input.brevoApiKey,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { email: input.brevoSenderEmail, name: 'Ford One' },
+        to: [{ email: input.dto.email, name: input.dto.nome }],
+        subject: 'Recebemos seu contato — Ford One',
+        textContent: [
+          `Olá, ${input.dto.nome}!`,
+          '',
+          `Recebemos sua mensagem sobre o ${input.dto.veiculoInteresse} e nossa equipe entrará em contato em breve.`,
+          '',
+          `Mensagem enviada: "${input.dto.mensagem}"`,
+          '',
+          'Ford One',
+        ].join('\n'),
+        htmlContent: this.buildConfirmationHtml(input.dto),
+      }),
     });
 
-    await transporter.sendMail({
-      from: `Ford One <${input.gmailUser}>`,
-      to: input.dto.email,
-      subject: 'Recebemos seu contato — Ford One',
-      text: [
-        `Olá, ${input.dto.nome}!`,
-        '',
-        `Recebemos sua mensagem sobre o ${input.dto.veiculoInteresse} e nossa equipe entrará em contato em breve.`,
-        '',
-        `Mensagem enviada: "${input.dto.mensagem}"`,
-        '',
-        'Ford One',
-      ].join('\n'),
-      html: this.buildConfirmationHtml(input.dto),
-    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as BrevoErrorResponse;
+      throw new Error(body.message ?? `Brevo respondeu HTTP ${response.status}`);
+    }
   }
 
   /** HTML com estilo inline (exigência de clientes de email) e escape manual

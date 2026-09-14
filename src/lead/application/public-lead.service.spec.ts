@@ -2,17 +2,7 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { jest } from '@jest/globals';
 import { LeadUrgencia } from '../../../generated/prisma/enums.js';
-
-const sendMailMock = jest.fn();
-const createTransportMock = jest.fn(() => ({ sendMail: sendMailMock }));
-
-// nodemailer é importado direto (não injetado no construtor), então em ESM
-// precisa de unstable_mockModule + import dinâmico do serviço depois do mock.
-jest.unstable_mockModule('nodemailer', () => ({
-  default: { createTransport: createTransportMock },
-}));
-
-const { PublicLeadService } = await import('./public-lead.service.js');
+import { PublicLeadService } from './public-lead.service.js';
 
 describe('PublicLeadService', () => {
   const dto = {
@@ -23,18 +13,17 @@ describe('PublicLeadService', () => {
     mensagem: 'Quero uma proposta',
   };
 
-  function setup() {
+  function setup(fetchMock: jest.Mock) {
     const repository = { create: jest.fn().mockResolvedValue({ id: 'lead-id' }) };
     const config = {
       get: jest.fn((key: string) =>
         ({
-          GMAIL_USER: 'concessionaria@gmail.com',
-          GMAIL_APP_PASSWORD: 'app-password-de-teste',
+          BREVO_API_KEY: 'brevo-key-de-teste',
+          BREVO_SENDER_EMAIL: 'concessionaria@gmail.com',
         })[key],
       ),
     } as unknown as ConfigService;
-    sendMailMock.mockReset();
-    createTransportMock.mockClear();
+    global.fetch = fetchMock as unknown as typeof fetch;
     return {
       service: new PublicLeadService(repository as never, config),
       repository,
@@ -42,8 +31,12 @@ describe('PublicLeadService', () => {
   }
 
   it('persiste o lead e confirma o recebimento por email pro próprio cliente que entrou em contato', async () => {
-    const { service, repository } = setup();
-    sendMailMock.mockResolvedValue({ messageId: 'email-id' });
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: jest.fn().mockResolvedValue({ messageId: 'email-id' }),
+    });
+    const { service, repository } = setup(fetchMock);
 
     await expect(service.create(dto)).resolves.toEqual({
       id: 'lead-id',
@@ -56,27 +49,33 @@ describe('PublicLeadService', () => {
         necessidade: 'Quero uma proposta',
       }),
     );
-    expect(createTransportMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.brevo.com/v3/smtp/email',
       expect.objectContaining({
-        auth: { user: 'concessionaria@gmail.com', pass: 'app-password-de-teste' },
+        headers: expect.objectContaining({ 'api-key': 'brevo-key-de-teste' }),
       }),
     );
     // A confirmação vai pro cliente (dto.email), não pra concessionária.
-    expect(sendMailMock).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'maria@example.com' }),
-    );
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.to).toEqual([{ email: 'maria@example.com', name: 'Maria Silva' }]);
+    expect(body.sender).toEqual({ email: 'concessionaria@gmail.com', name: 'Ford One' });
   });
 
-  it('retorna erro explícito quando o envio via Gmail falha', async () => {
-    const { service } = setup();
-    sendMailMock.mockRejectedValue(new Error('SMTP error'));
+  it('retorna erro explícito quando o envio via Brevo falha', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: jest.fn().mockResolvedValue({ message: 'Key not found' }),
+    });
+    const { service } = setup(fetchMock);
 
     await expect(service.create(dto)).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
   });
 
-  it('recusa o contato antes de persistir se as credenciais do Gmail não estiverem configuradas', async () => {
+  it('recusa o contato antes de persistir se as credenciais do Brevo não estiverem configuradas', async () => {
     const repository = { create: jest.fn() };
     const config = { get: jest.fn(() => undefined) } as unknown as ConfigService;
     const service = new PublicLeadService(repository as never, config);
