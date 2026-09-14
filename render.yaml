@@ -1,0 +1,52 @@
+services:
+  - name: ford-backend
+    type: web
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: ADMIN_EMAIL
+        value: admin@ford.com.br
+      - key: ADMIN_NOME
+        value: Administrador Geral
+      - key: ADMIN_CPF
+        value: "00000000000"
+      - key: ADMIN_REGISTRO
+        value: FRD-ADMIN-001
+      - key: FORD_BASE_URL
+        value: https://www.ford.com.br
+      - key: SYNC_TIMEOUT_MS
+        value: "120000"
+      - key: USER_AGENT
+        value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+      - key: ENABLE_HEADLESS
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      # ---- Preenchidos na hora da criação do Blueprint (Render pergunta um
+      # a um) — nunca ficam commitados com valor real neste arquivo. ----
+      - key: DATABASE_URL # connection string DIRETA do Neon (sem "-pooler")
+        sync: false
+      - key: JWT_SECRET # openssl rand -base64 48
+        sync: false
+      - key: ADMIN_SENHA # openssl rand -base64 18
+        sync: false
+      - key: CORS_ORIGINS # preenche depois, quando tiver as URLs do Cloudflare Pages
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD # gerada em myaccount.google.com/apppasswords
+        sync: false
+      - key: GEMINI_KEY # aistudio.google.com/app/apikey
+        sync: false
+      - key: DATA_ENCRYPTION_KEY # openssl rand -base64 32
+        sync: false
+      - key: DATA_ENCRYPTION_PEPPER # openssl rand -hex 32
+        sync: false

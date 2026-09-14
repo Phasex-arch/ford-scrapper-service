@@ -2,7 +2,17 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { jest } from '@jest/globals';
 import { LeadUrgencia } from '../../../generated/prisma/enums.js';
-import { PublicLeadService } from './public-lead.service.js';
+
+const sendMailMock = jest.fn();
+const createTransportMock = jest.fn(() => ({ sendMail: sendMailMock }));
+
+// nodemailer é importado direto (não injetado no construtor), então em ESM
+// precisa de unstable_mockModule + import dinâmico do serviço depois do mock.
+jest.unstable_mockModule('nodemailer', () => ({
+  default: { createTransport: createTransportMock },
+}));
+
+const { PublicLeadService } = await import('./public-lead.service.js');
 
 describe('PublicLeadService', () => {
   const dto = {
@@ -13,31 +23,27 @@ describe('PublicLeadService', () => {
     mensagem: 'Quero uma proposta',
   };
 
-  function setup(fetchMock: jest.Mock) {
+  function setup() {
     const repository = { create: jest.fn().mockResolvedValue({ id: 'lead-id' }) };
     const config = {
       get: jest.fn((key: string) =>
         ({
-          RESEND_API_KEY: 're_test',
-          RESEND_FROM_EMAIL: 'site@example.com',
-          LEAD_NOTIFICATION_EMAIL: 'sales@example.com',
+          GMAIL_USER: 'concessionaria@gmail.com',
+          GMAIL_APP_PASSWORD: 'app-password-de-teste',
         })[key],
       ),
     } as unknown as ConfigService;
-    global.fetch = fetchMock as unknown as typeof fetch;
+    sendMailMock.mockReset();
+    createTransportMock.mockClear();
     return {
       service: new PublicLeadService(repository as never, config),
       repository,
     };
   }
 
-  it('persists the lead and sends the Resend notification', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: jest.fn().mockResolvedValue({ id: 'email-id' }),
-    });
-    const { service, repository } = setup(fetchMock);
+  it('persiste o lead e confirma o recebimento por email pro próprio cliente que entrou em contato', async () => {
+    const { service, repository } = setup();
+    sendMailMock.mockResolvedValue({ messageId: 'email-id' });
 
     await expect(service.create(dto)).resolves.toEqual({
       id: 'lead-id',
@@ -50,26 +56,32 @@ describe('PublicLeadService', () => {
         necessidade: 'Quero uma proposta',
       }),
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.resend.com/emails',
+    expect(createTransportMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer re_test',
-        }),
+        auth: { user: 'concessionaria@gmail.com', pass: 'app-password-de-teste' },
       }),
+    );
+    // A confirmação vai pro cliente (dto.email), não pra concessionária.
+    expect(sendMailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'maria@example.com' }),
     );
   });
 
-  it('returns an explicit unavailable error when Resend fails', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: jest.fn().mockResolvedValue({ message: 'provider error' }),
-    });
-    const { service } = setup(fetchMock);
+  it('retorna erro explícito quando o envio via Gmail falha', async () => {
+    const { service } = setup();
+    sendMailMock.mockRejectedValue(new Error('SMTP error'));
 
     await expect(service.create(dto)).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
+  });
+
+  it('recusa o contato antes de persistir se as credenciais do Gmail não estiverem configuradas', async () => {
+    const repository = { create: jest.fn() };
+    const config = { get: jest.fn(() => undefined) } as unknown as ConfigService;
+    const service = new PublicLeadService(repository as never, config);
+
+    await expect(service.create(dto)).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(repository.create).not.toHaveBeenCalled();
   });
 });
