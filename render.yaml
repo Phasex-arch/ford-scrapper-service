@@ -30,6 +30,11 @@ services:
         value: "true"
       - key: LOG_LEVEL
         value: info
+      # Placeholder pra não travar o boot (o app recusa subir com CORS_ORIGINS
+      # vazio/"*" em produção) — troque pelas URLs reais do Cloudflare Pages
+      # assim que existirem (passo 5 do DEPLOY.md).
+      - key: CORS_ORIGINS
+        value: https://placeholder.pages.dev
       # ---- Preenchidos na hora da criação do Blueprint (Render pergunta um
       # a um) — nunca ficam commitados com valor real neste arquivo. ----
       - key: DATABASE_URL # connection string DIRETA do Neon (sem "-pooler")
@@ -37,8 +42,6 @@ services:
       - key: JWT_SECRET # openssl rand -base64 48
         sync: false
       - key: ADMIN_SENHA # openssl rand -base64 18
-        sync: false
-      - key: CORS_ORIGINS # preenche depois, quando tiver as URLs do Cloudflare Pages
         sync: false
       - key: GMAIL_USER
         sync: false
