@@ -400,20 +400,26 @@ async function seedFinanciamentos(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const METAS_SEED = [
-  { codigo: 'M001', titulo: 'Vendas Mensais',     periodo: 'Setembro/2026', indicador: 'vendas',  atual: 22,      alvo: 28,      unidade: 'un.',   responsavel: 'Equipe Comercial',      lowerIsBetter: false },
-  { codigo: 'M002', titulo: 'Receita Mensal',     periodo: 'Setembro/2026', indicador: 'receita', atual: 1248000, alvo: 1200000, unidade: 'R$',    responsavel: 'Toda a Concessionaria', lowerIsBetter: false },
-  { codigo: 'M003', titulo: 'NPS',                periodo: 'Setembro/2026', indicador: 'nps',     atual: 72,      alvo: 70,      unidade: 'pts',   responsavel: 'Atendimento',           lowerIsBetter: false },
-  { codigo: 'M004', titulo: 'SLA Medio',          periodo: 'Setembro/2026', indicador: 'sla',     atual: 2.3,     alvo: 4,       unidade: 'h',     responsavel: 'Equipe Tecnica',        lowerIsBetter: true  },
-  { codigo: 'M005', titulo: 'Leads Qualificados', periodo: 'Setembro/2026', indicador: 'leads',   atual: 61,      alvo: 80,      unidade: 'leads', responsavel: 'Marketing',             lowerIsBetter: false },
-  { codigo: 'M006', titulo: 'Taxa de Conversao',  periodo: 'Setembro/2026', indicador: 'conv',    atual: 34.2,    alvo: 32,      unidade: '%',     responsavel: 'Ricardo Costa',         lowerIsBetter: false },
+  { codigo: 'M001', titulo: 'Vendas Mensais',     periodo: 'Setembro/2026', indicador: 'vendas',  atual: 22,      alvo: 28,      unidade: 'un.',   responsavel: 'Equipe Comercial',      lowerIsBetter: false, responsavelEmail: null },
+  { codigo: 'M002', titulo: 'Receita Mensal',     periodo: 'Setembro/2026', indicador: 'receita', atual: 1248000, alvo: 1200000, unidade: 'R$',    responsavel: 'Toda a Concessionaria', lowerIsBetter: false, responsavelEmail: null },
+  { codigo: 'M003', titulo: 'NPS',                periodo: 'Setembro/2026', indicador: 'nps',     atual: 72,      alvo: 70,      unidade: 'pts',   responsavel: 'Atendimento',           lowerIsBetter: false, responsavelEmail: null },
+  { codigo: 'M004', titulo: 'SLA Medio',          periodo: 'Setembro/2026', indicador: 'sla',     atual: 2.3,     alvo: 4,       unidade: 'h',     responsavel: 'Equipe Tecnica',        lowerIsBetter: true,  responsavelEmail: null },
+  { codigo: 'M005', titulo: 'Leads Qualificados', periodo: 'Setembro/2026', indicador: 'leads',   atual: 61,      alvo: 80,      unidade: 'leads', responsavel: 'Marketing',             lowerIsBetter: false, responsavelEmail: null },
+  // Unico exemplo com responsavelId de verdade — demonstra meta individual
+  // (calculada só com os leads/financiamentos atribuidos a essa pessoa).
+  { codigo: 'M006', titulo: 'Taxa de Conversao',  periodo: 'Setembro/2026', indicador: 'conv',    atual: 34.2,    alvo: 32,      unidade: '%',     responsavel: 'Ricardo Costa',         lowerIsBetter: false, responsavelEmail: 'ricardo.costa@ford.com.br' },
 ] as const;
 
 async function seedMetas(): Promise<void> {
   for (const m of METAS_SEED) {
+    const { responsavelEmail, ...dados } = m;
+    const responsavelId = responsavelEmail
+      ? (await prisma.colaborador.findUnique({ where: { email: responsavelEmail }, select: { id: true } }))?.id ?? null
+      : null;
     await prisma.meta.upsert({
       where: { codigo: m.codigo },
-      update: {},
-      create: m,
+      update: { responsavelId },
+      create: { ...dados, responsavelId },
     });
   }
   log('METAS', `${METAS_SEED.length} metas`);

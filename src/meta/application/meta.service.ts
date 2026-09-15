@@ -29,6 +29,7 @@ interface MetaLike {
   indicador: string;
   periodo: string;
   atual: number;
+  responsavelId?: string | null;
 }
 
 @Injectable()
@@ -81,7 +82,7 @@ export class MetaService {
     if (!INDICADORES_COMPUTAVEIS.has(meta.indicador)) return meta;
     const range = this.parsePeriodo(meta.periodo);
     if (!range) return meta;
-    const atual = await this.computeAtual(meta.indicador, range);
+    const atual = await this.computeAtual(meta.indicador, range, meta.responsavelId ?? null);
     if (atual === null) return meta;
     return { ...meta, atual };
   }
@@ -111,31 +112,40 @@ export class MetaService {
   private async computeAtual(
     indicador: string,
     range: { inicio: Date; fim: Date },
+    responsavelId: string | null,
   ): Promise<number | null> {
     const where = { createdAt: { gte: range.inicio, lt: range.fim } };
+    // Meta sem responsável = loja/equipe inteira (comportamento original).
+    // Com responsável, filtra pelos dados atribuídos aquela pessoa mesma —
+    // Lead e Financiamento já têm responsavelId real no schema.
+    const porResponsavel = responsavelId ? { responsavelId } : {};
 
     switch (indicador) {
       case 'leads':
-        return this.prisma.lead.count({ where });
+        return this.prisma.lead.count({ where: { ...where, ...porResponsavel } });
 
       case 'vendas':
         // Proxy: financiamento aprovado no periodo, mesmo sinal usado pela
         // "conversao" do dashboard — nao ha registro direto de "venda".
         return this.prisma.financiamento.count({
-          where: { ...where, status: 'APROVADO' },
+          where: { ...where, status: 'APROVADO', ...porResponsavel },
         });
 
       case 'receita': {
-        const [financiamentos, ordens] = await Promise.all([
-          this.prisma.financiamento.findMany({
-            where: { ...where, status: 'APROVADO' },
-            select: { valor: true },
-          }),
-          this.prisma.ordemServico.findMany({
-            where: { ...where, status: 'CONCLUIDO' },
-            select: { valor: true },
-          }),
-        ]);
+        const financiamentos = await this.prisma.financiamento.findMany({
+          where: { ...where, status: 'APROVADO', ...porResponsavel },
+          select: { valor: true },
+        });
+        // Receita de ordem de serviço não é atribuível a um consultor de
+        // vendas (OrdemServico.tecnico é texto livre, sem relacao real com
+        // Colaborador) — meta de loja inteira soma os dois; meta de pessoa
+        // conta só o que é dela de verdade (financiamento).
+        const ordens = responsavelId
+          ? []
+          : await this.prisma.ordemServico.findMany({
+              where: { ...where, status: 'CONCLUIDO' },
+              select: { valor: true },
+            });
         const total =
           financiamentos.reduce((acc, f) => acc + f.valor, 0) +
           ordens.reduce((acc, o) => acc + o.valor, 0);
@@ -144,15 +154,18 @@ export class MetaService {
 
       case 'conv': {
         const [total, convertidos] = await Promise.all([
-          this.prisma.lead.count({ where }),
+          this.prisma.lead.count({ where: { ...where, ...porResponsavel } }),
           this.prisma.lead.count({
-            where: { ...where, financiamentos: { some: { status: 'APROVADO' } } },
+            where: { ...where, ...porResponsavel, financiamentos: { some: { status: 'APROVADO' } } },
           }),
         ]);
         return total > 0 ? +((convertidos / total) * 100).toFixed(1) : 0;
       }
 
       case 'sla': {
+        // Sem relação real entre OrdemServico e Colaborador (tecnico é texto
+        // livre) — SLA sempre reflete a loja inteira, mesmo com responsável
+        // definido na meta.
         const ordens = await this.prisma.ordemServico.findMany({
           where: { ...where, status: 'CONCLUIDO' },
           select: { createdAt: true, updatedAt: true },

@@ -117,6 +117,7 @@ model Colaborador {
   auditLogs AuditLog[]
   leadsResponsavel          Lead[]          @relation("LeadResponsavel")
   financiamentosResponsavel Financiamento[] @relation("FinanciamentoResponsavel")
+  metasResponsavel          Meta[]          @relation("MetaResponsavel")
 
   @@index([email])
   @@index([registro])
@@ -354,21 +355,29 @@ model Agendamento {
 }
 
 model Meta {
-  id            String   @id @default(uuid())
-  codigo        String   @unique
+  id            String       @id @default(uuid())
+  codigo        String       @unique
   titulo        String
   periodo       String
   indicador     String
   atual         Float
   alvo          Float
   unidade       String
+  // Rótulo de exibição (mantido mesmo com responsavelId setado, pra sobreviver
+  // à exclusão do colaborador e cobrir metas de equipe/loja inteira, que não
+  // apontam pra uma pessoa). Quando responsavelId existe, o cálculo ao vivo
+  // (meta.service.ts) filtra pelos dados daquela pessoa; quando é null, a
+  // meta é da loja/equipe inteira — mesmo comportamento de antes.
   responsavel   String
-  lowerIsBetter Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  responsavelId String?
+  responsavelColaborador Colaborador? @relation("MetaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  lowerIsBetter Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@index([indicador])
   @@index([periodo])
+  @@index([responsavelId])
 }
 
 enum OrdemServicoStatus {

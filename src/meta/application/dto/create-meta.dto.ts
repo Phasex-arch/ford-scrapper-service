@@ -5,8 +5,10 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateMetaDto {
@@ -50,6 +52,15 @@ export class CreateMetaDto {
   @IsString()
   @MaxLength(120)
   responsavel!: string;
+
+  @ApiPropertyOptional({
+    description: 'UUID do colaborador responsável — se ausente/null, a meta é de loja/equipe (dado real da loja inteira no período)',
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.responsavelId !== null)
+  @IsUUID()
+  responsavelId?: string | null;
 
   @ApiPropertyOptional({ default: false })
   @IsOptional()
