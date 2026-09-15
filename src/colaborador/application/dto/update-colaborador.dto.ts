@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -18,11 +19,12 @@ export class UpdateColaboradorDto {
   @MaxLength(120)
   nome?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '(11) 98765-4321' })
   @IsOptional()
   @IsString()
-  @MinLength(8)
-  @MaxLength(20)
+  @Matches(/^\(\d{2}\) \d{4,5}-\d{4}$/, {
+    message: 'telefone deve estar no formato (XX) XXXXX-XXXX',
+  })
   telefone?: string;
 
   @ApiPropertyOptional()

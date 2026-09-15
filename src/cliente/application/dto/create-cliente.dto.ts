@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
   MinLength,
@@ -29,8 +30,9 @@ export class CreateClienteDto {
 
   @ApiProperty({ example: '(11) 98245-1122' })
   @IsString()
-  @MinLength(8)
-  @MaxLength(20)
+  @Matches(/^\(\d{2}\) \d{4,5}-\d{4}$/, {
+    message: 'telefone deve estar no formato (XX) XXXXX-XXXX',
+  })
   telefone!: string;
 
   @ApiProperty({ example: 'carlos.mendes@gmail.com' })
