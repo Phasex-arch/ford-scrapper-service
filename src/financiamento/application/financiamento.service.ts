@@ -10,10 +10,7 @@ import {
 } from '../infrastructure/financiamento.repository.js';
 import type { CreateFinanciamentoDto } from './dto/create-financiamento.dto.js';
 import type { UpdateFinanciamentoDto } from './dto/update-financiamento.dto.js';
-
-function gerarCodigoCliente(): string {
-  return `C-${Date.now().toString(36).toUpperCase()}`;
-}
+import { resolverOuCriarClienteDeLead } from '../../lead/application/lead-conversion.util.js';
 
 function gerarCodigoVeiculoCliente(): string {
   return `VC-${Date.now().toString(36).toUpperCase()}`;
@@ -90,59 +87,7 @@ export class FinanciamentoService {
       const lead = await tx.lead.findUnique({ where: { id: financiamento.leadId } });
       if (!lead) return atualizado;
 
-      let clienteId = lead.clienteId;
-      if (!clienteId) {
-        let cliente = lead.email
-          ? await tx.cliente.findFirst({ where: { email: lead.email } })
-          : null;
-        if (!cliente) {
-          cliente = await tx.cliente.findFirst({ where: { telefone: lead.telefone } });
-        }
-        if (!cliente) {
-          cliente = await tx.cliente.create({
-            data: {
-              codigo: gerarCodigoCliente(),
-              nome: lead.clienteNome,
-              telefone: lead.telefone,
-              email: lead.email ?? '',
-              iniciais: lead.iniciais,
-              segmento: 'Padrao',
-              status: 'ATIVO',
-              ultimaVisita: new Date(),
-            },
-          });
-        } else if (cliente.nome !== lead.clienteNome || cliente.telefone !== lead.telefone) {
-          // Achado por e-mail/telefone já batendo com um cliente existente
-          // (cadastro duplicado — a mesma pessoa entrou em contato de novo).
-          // O contato mais recente é o dado mais confiável, mas o cadastro
-          // antigo não pode só desaparecer: fica registrado no histórico do
-          // cliente antes de ser sobrescrito.
-          await tx.auditLog.create({
-            data: {
-              action: 'cliente_merge_duplicado',
-              resource: 'Cliente',
-              resourceId: cliente.id,
-              details: {
-                nomeAntigo: cliente.nome,
-                telefoneAntigo: cliente.telefone,
-                nomeNovo: lead.clienteNome,
-                telefoneNovo: lead.telefone,
-                leadDuplicadoId: lead.id,
-                leadDuplicadoCodigo: lead.codigo,
-              },
-            },
-          });
-          cliente = await tx.cliente.update({
-            where: { id: cliente.id },
-            data: { nome: lead.clienteNome, telefone: lead.telefone, iniciais: lead.iniciais },
-          });
-        }
-        clienteId = cliente.id;
-        await tx.lead.update({
-          where: { id: lead.id },
-          data: { convertido: true, clienteId },
-        });
-      }
+      const clienteId = await resolverOuCriarClienteDeLead(tx, lead);
 
       if (financiamento.estoqueVeiculoId) {
         const estoque = await tx.estoqueVeiculo.findUnique({
