@@ -155,10 +155,13 @@ export class MetaService {
       }
 
       case 'conv': {
+        // Lead.convertido é a fonte real — marcado automaticamente tanto por
+        // financiamento aprovado quanto por OS paga concluída (ver
+        // FinanciamentoService.aprovar / ServicoService.fecharAgendamentoEConverterLead).
         const [total, convertidos] = await Promise.all([
           this.prisma.lead.count({ where: { ...where, ...porResponsavel } }),
           this.prisma.lead.count({
-            where: { ...where, ...porResponsavel, financiamentos: { some: { status: 'APROVADO' } } },
+            where: { ...where, ...porResponsavel, convertido: true },
           }),
         ]);
         return total > 0 ? +((convertidos / total) * 100).toFixed(1) : 0;

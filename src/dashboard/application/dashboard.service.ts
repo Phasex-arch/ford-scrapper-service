@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service.js';
 
-export type DashPeriod = 'hoje' | 'semana' | 'mes' | 'trimestre';
+export type DashPeriod = 'hoje' | 'semana' | 'mes' | 'trimestre' | 'ano';
 
 const MESES = [
   'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
   'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
 ];
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const SERIES_MESES = 6;
 const SERIES_TRIMESTRES = 6;
 const ESTOQUE_BAIXO_LIMITE = 3;
@@ -38,7 +39,9 @@ export interface DesempenhoSnapshot {
    * real dos leads atribuídos a ele no mês (responsavelId). Sem atribuição
    * de "responsável" no lead, o colaborador aparece com 0%, não some da
    * lista — é dado real de que ninguém foi atribuído a ele ainda. */
-  consultores: { nome: string; conversao: number }[];
+  /** convertidos = contagem bruta por trás do %, usada só pro hover do
+   * gráfico de barras — o % sozinho não diz se foi 1 de 1 ou 10 de 10. */
+  consultores: { nome: string; conversao: number; convertidos: number }[];
   /** Últimos N meses: % de clientes criados naquele mês que seguem ATIVO hoje. */
   retencaoMensal: { labels: string[]; valores: number[] };
   geradoEm: string;
@@ -80,6 +83,13 @@ export interface DashboardSnapshot {
     /** Meta de receita mensal cadastrada em Metas — linha de referência tracejada. */
     target: number[];
     conversion: number[];
+    /** Contagem bruta de leads convertidos por mês (mesmo índice de `conversion`)
+     * — usada só pro tooltip do gráfico de barras; a % sozinha não diz se foi
+     * "1 de 1" ou "10 de 10". */
+    conversionCount: number[];
+    /** Só presente quando periodo='ano' — receita dos mesmos 12 meses um
+     * ano antes, pra comparação direta na linha do gráfico. */
+    revenuePrevYear?: number[];
   };
   alertas: {
     slaRisco: { quantidade: number } | null;
@@ -138,7 +148,7 @@ export class DashboardService {
         _count: { id: true },
         where: { createdAt: { gte: intervalo.inicio, lt: intervalo.fim } },
       }),
-      this.buildMonthlySeries(SERIES_MESES),
+      this.buildPeriodSeries(periodo),
       this.buildAlertas(),
     ]);
 
@@ -212,9 +222,7 @@ export class DashboardService {
           select: { valor: true },
         }),
         this.prisma.lead.count({ where }),
-        this.prisma.lead.count({
-          where: { ...where, financiamentos: { some: { status: 'APROVADO' } } },
-        }),
+        this.prisma.lead.count({ where: { ...where, convertido: true } }),
         this.buildQuarterlySeries(SERIES_TRIMESTRES),
       ]);
 
@@ -333,13 +341,12 @@ export class DashboardService {
         };
         const [total, convertidos] = await Promise.all([
           this.prisma.lead.count({ where }),
-          this.prisma.lead.count({
-            where: { ...where, financiamentos: { some: { status: 'APROVADO' } } },
-          }),
+          this.prisma.lead.count({ where: { ...where, convertido: true } }),
         ]);
         return {
           nome: c.nome,
           conversao: total > 0 ? +((convertidos / total) * 100).toFixed(1) : 0,
+          convertidos,
         };
       }),
     );
@@ -387,11 +394,11 @@ export class DashboardService {
       ordensConcluidas,
     ] = await Promise.all([
       this.prisma.lead.count({ where }),
-      // "Convertido" = o lead tem ao menos um financiamento aprovado vinculado
-      // (Financiamento.leadId), independente de quando o financiamento fechou.
-      this.prisma.lead.count({
-        where: { ...where, financiamentos: { some: { status: 'APROVADO' } } },
-      }),
+      // Lead.convertido é a fonte real — marcado automaticamente tanto por
+      // financiamento aprovado quanto por OS paga concluída (ver
+      // FinanciamentoService.aprovar / ServicoService.fecharAgendamentoEConverterLead).
+      // Antes só contava financiamento aprovado e ignorava a segunda via.
+      this.prisma.lead.count({ where: { ...where, convertido: true } }),
       this.prisma.ordemServico.findMany({ where, select: { valor: true, status: true } }),
       this.prisma.financiamento.findMany({ where, select: { valor: true, status: true } }),
       this.prisma.avaliacao.aggregate({ _avg: { nota: true }, _count: { nota: true }, where }),
@@ -530,42 +537,97 @@ export class DashboardService {
   }
 
   /**
-   * Série dos últimos N meses (calendário, mês corrente incluso) de receita
-   * (financiamentos aprovados + serviços concluídos) e conversão de leads,
-   * pro RevenueChart do dashboard. Independente do `periodo` selecionado —
-   * é sempre "os últimos N meses fechados por mês civil".
+   * Janelas de tempo da série do RevenueChart, com granularidade adaptada
+   * ao `periodo` selecionado no Dashboard — antes a série era sempre fixa
+   * em "últimos 6 meses" (calendário) não importa o que o seletor
+   * mostrasse, o que fazia o gráfico parecer travado ao trocar o filtro.
+   * Cada período cobre a janela INTEIRA correspondente (não só "até agora")
+   * — mesmo padrão do "trimestre", que já mostrava o mês corrente inteiro:
+   *   hoje      → 12 blocos de 2h cobrindo o dia inteiro (00h–24h)
+   *   semana    → 7 dias (hoje e os 6 anteriores)
+   *   mes       → 4 blocos de 7 dias (últimas 4 semanas)
+   *   trimestre → 6 meses civis (comportamento original, inalterado)
+   */
+  private buildPeriodBuckets(periodo: DashPeriod): { label: string; inicio: Date; fim: Date }[] {
+    const now = new Date();
+    const HOUR = 3_600_000;
+    const DAY = 24 * HOUR;
+
+    if (periodo === 'hoje') {
+      const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      return Array.from({ length: 12 }, (_, i) => ({
+        label: `${String(i * 2).padStart(2, '0')}h`,
+        inicio: new Date(dayStart + i * 2 * HOUR),
+        fim: new Date(dayStart + (i + 1) * 2 * HOUR),
+      }));
+    }
+
+    if (periodo === 'semana') {
+      const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      const start = todayStart - 6 * DAY;
+      return Array.from({ length: 7 }, (_, i) => {
+        const inicio = new Date(start + i * DAY);
+        return { label: DIAS_SEMANA[inicio.getUTCDay()], inicio, fim: new Date(start + (i + 1) * DAY) };
+      });
+    }
+
+    if (periodo === 'mes') {
+      const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      const start = todayStart - 27 * DAY;
+      return Array.from({ length: 4 }, (_, i) => {
+        const inicio = new Date(start + i * 7 * DAY);
+        return { label: this.shortDate(inicio), inicio, fim: new Date(start + (i + 1) * 7 * DAY) };
+      });
+    }
+
+    // ano — 12 meses civis (o ano corrente completo, rolando com "hoje" —
+    // mesma lógica do trimestre, só com mais meses).
+    const meses = periodo === 'ano' ? 12 : SERIES_MESES;
+    return Array.from({ length: meses }, (_, idx) => {
+      const i = meses - 1 - idx;
+      const inicio = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      const fim = new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth() + 1, 1));
+      return { label: this.monthLabel(inicio), inicio, fim };
+    });
+  }
+
+  /**
+   * Série do RevenueChart (receita + conversão de leads), com bucket por
+   * janela de `buildPeriodBuckets` — mesma fonte de receita de sempre
+   * (financiamentos aprovados + serviços concluídos) e conversão real
+   * (Lead.convertido).
    *
    * `target` é a meta de receita mensal cadastrada em Metas (indicador
-   * "receita") — mesmo valor repetido em todos os meses da série, como
-   * linha de referência ("é aqui que a receita mensal precisa chegar"), não
-   * uma meta histórica por mês (o sistema só guarda a meta do mês corrente).
+   * "receita"), como linha de referência ("é aqui que a receita deveria
+   * chegar neste intervalo"). No período trimestre cada bucket já é ~1 mês,
+   * então mostra o valor cheio da meta, como sempre foi; nos períodos mais
+   * finos (hoje/semana/mes) a meta é PRORATEADA pela duração do bucket
+   * (ex.: um bucket de 1 dia mostra meta/dias-do-mês) — sem isso, uma barra
+   * de receita de um único dia ficaria minúscula ao lado de uma linha de
+   * meta mensal inteira, o que não ajuda a enxergar se o ritmo está bom.
    * Fica em 0 (linha não aparece) se não houver meta de receita cadastrada.
    */
-  private async buildMonthlySeries(months: number) {
-    const now = new Date();
-    const start = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1),
-    );
+  private async buildPeriodSeries(periodo: DashPeriod) {
+    const buckets = this.buildPeriodBuckets(periodo);
+    const rangeStart = buckets[0].inicio;
+    const rangeEnd = buckets[buckets.length - 1].fim;
 
     const [financiamentosAprovados, servicosConcluidos, leads, leadsConvertidos, metaReceita] =
       await Promise.all([
         this.prisma.financiamento.findMany({
-          where: { status: 'APROVADO', createdAt: { gte: start } },
+          where: { status: 'APROVADO', createdAt: { gte: rangeStart, lt: rangeEnd } },
           select: { valor: true, createdAt: true },
         }),
         this.prisma.ordemServico.findMany({
-          where: { status: 'CONCLUIDO', createdAt: { gte: start } },
+          where: { status: 'CONCLUIDO', createdAt: { gte: rangeStart, lt: rangeEnd } },
           select: { valor: true, createdAt: true },
         }),
         this.prisma.lead.findMany({
-          where: { createdAt: { gte: start } },
+          where: { createdAt: { gte: rangeStart, lt: rangeEnd } },
           select: { id: true, createdAt: true },
         }),
         this.prisma.lead.findMany({
-          where: {
-            createdAt: { gte: start },
-            financiamentos: { some: { status: 'APROVADO' } },
-          },
+          where: { createdAt: { gte: rangeStart, lt: rangeEnd }, convertido: true },
           select: { id: true },
         }),
         this.prisma.meta.findFirst({
@@ -575,51 +637,98 @@ export class DashboardService {
         }),
       ]);
     const metaMensal = metaReceita?.alvo ?? 0;
-
     const convertedIds = new Set(leadsConvertidos.map((l) => l.id));
 
-    const buckets: {
-      key: string;
-      label: string;
-      receita: number;
-      leadsTotal: number;
-      leadsConvertidos: number;
-    }[] = [];
-    for (let i = months - 1; i >= 0; i--) {
-      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
-      buckets.push({
-        key: this.monthKey(d),
-        label: this.monthLabel(d),
-        receita: 0,
-        leadsTotal: 0,
-        leadsConvertidos: 0,
-      });
-    }
-    const byKey = new Map(buckets.map((b) => [b.key, b]));
+    const acumulado = buckets.map((b) => ({ ...b, receita: 0, leadsTotal: 0, leadsConvertidos: 0 }));
+    const bucketPara = (data: Date) => acumulado.find((b) => data >= b.inicio && data < b.fim);
 
     for (const f of financiamentosAprovados) {
-      const bucket = byKey.get(this.monthKey(f.createdAt));
-      if (bucket) bucket.receita += f.valor;
+      const b = bucketPara(f.createdAt);
+      if (b) b.receita += f.valor;
     }
     for (const s of servicosConcluidos) {
-      const bucket = byKey.get(this.monthKey(s.createdAt));
-      if (bucket) bucket.receita += s.valor;
+      const b = bucketPara(s.createdAt);
+      if (b) b.receita += s.valor;
     }
     for (const l of leads) {
-      const bucket = byKey.get(this.monthKey(l.createdAt));
-      if (!bucket) continue;
-      bucket.leadsTotal += 1;
-      if (convertedIds.has(l.id)) bucket.leadsConvertidos += 1;
+      const b = bucketPara(l.createdAt);
+      if (!b) continue;
+      b.leadsTotal += 1;
+      if (convertedIds.has(l.id)) b.leadsConvertidos += 1;
     }
 
+    const now = new Date();
+    const diasNoMesAtual = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+    const DAY = 86_400_000;
+
+    // No período "ano" a linha de referência vira "Ano anterior" (comparação
+    // real, o que o usuário pediu) no lugar da Meta — 12x a meta mensal
+    // repetida não diria nada de novo que a Meta Mensal (tela de Metas) já
+    // não mostra, e mostrar as duas juntas (Meta + Ano anterior) ficaria
+    // cheio demais pro mesmo gráfico.
+    const revenuePrevYear = periodo === 'ano' ? await this.buildRevenuePrevYear(acumulado) : undefined;
+
     return {
-      labels: buckets.map((b) => b.label),
-      revenue: buckets.map((b) => Math.round(b.receita)),
-      target: buckets.map(() => Math.round(metaMensal)),
-      conversion: buckets.map((b) =>
+      labels: acumulado.map((b) => b.label),
+      revenue: acumulado.map((b) => Math.round(b.receita)),
+      target: acumulado.map((b) => {
+        if (periodo === 'ano') return 0;
+        if (periodo === 'trimestre') return Math.round(metaMensal);
+        const bucketDias = (b.fim.getTime() - b.inicio.getTime()) / DAY;
+        return Math.round(metaMensal * (bucketDias / diasNoMesAtual));
+      }),
+      conversion: acumulado.map((b) =>
         b.leadsTotal > 0 ? +((b.leadsConvertidos / b.leadsTotal) * 100).toFixed(1) : 0,
       ),
+      conversionCount: acumulado.map((b) => b.leadsConvertidos),
+      ...(revenuePrevYear ? { revenuePrevYear } : {}),
     };
+  }
+
+  /**
+   * Receita (financiamentos aprovados + serviços concluídos) dos MESMOS 12
+   * meses de `buckets`, um ano antes — pra sobrepor "Ano anterior" na linha
+   * de Receita Mensal quando periodo='ano' (comparação direta mês a mês,
+   * não só o delta % agregado do KPI do topo).
+   */
+  private async buildRevenuePrevYear(
+    buckets: { label: string; inicio: Date; fim: Date }[],
+  ): Promise<number[]> {
+    const prevBuckets = buckets.map((b) => ({
+      inicio: new Date(Date.UTC(b.inicio.getUTCFullYear() - 1, b.inicio.getUTCMonth(), 1)),
+      fim: new Date(Date.UTC(b.fim.getUTCFullYear() - 1, b.fim.getUTCMonth(), 1)),
+    }));
+    const rangeStart = prevBuckets[0].inicio;
+    const rangeEnd = prevBuckets[prevBuckets.length - 1].fim;
+
+    const [financiamentosAprovados, servicosConcluidos] = await Promise.all([
+      this.prisma.financiamento.findMany({
+        where: { status: 'APROVADO', createdAt: { gte: rangeStart, lt: rangeEnd } },
+        select: { valor: true, createdAt: true },
+      }),
+      this.prisma.ordemServico.findMany({
+        where: { status: 'CONCLUIDO', createdAt: { gte: rangeStart, lt: rangeEnd } },
+        select: { valor: true, createdAt: true },
+      }),
+    ]);
+
+    const receitaPorBucket = prevBuckets.map(() => 0);
+    const indiceDoBucket = (data: Date) =>
+      prevBuckets.findIndex((b) => data >= b.inicio && data < b.fim);
+
+    for (const f of financiamentosAprovados) {
+      const i = indiceDoBucket(f.createdAt);
+      if (i >= 0) receitaPorBucket[i] += f.valor;
+    }
+    for (const s of servicosConcluidos) {
+      const i = indiceDoBucket(s.createdAt);
+      if (i >= 0) receitaPorBucket[i] += s.valor;
+    }
+    return receitaPorBucket.map((v) => Math.round(v));
+  }
+
+  private shortDate(d: Date): string {
+    return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
   }
 
   private monthKey(date: Date): string {
@@ -645,6 +754,9 @@ export class DashboardService {
         break;
       case 'trimestre':
         inicio.setMonth(inicio.getMonth() - 3);
+        break;
+      case 'ano':
+        inicio.setFullYear(inicio.getFullYear() - 1);
         break;
     }
     return { inicio, fim };

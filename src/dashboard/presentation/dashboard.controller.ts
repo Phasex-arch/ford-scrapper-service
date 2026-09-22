@@ -20,7 +20,7 @@ import {
   type DashPeriod,
 } from '../application/dashboard.service.js';
 
-const PERIODS: DashPeriod[] = ['hoje', 'semana', 'mes', 'trimestre'];
+const PERIODS: DashPeriod[] = ['hoje', 'semana', 'mes', 'trimestre', 'ano'];
 
 @ApiTags('Dashboard')
 @ApiBearerAuth()

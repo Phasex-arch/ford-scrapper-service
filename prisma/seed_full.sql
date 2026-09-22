@@ -14,17 +14,37 @@
 --     consultor sem lead atribuído no mês — 0% real, não escondido),
 --     retenção mensal
 --   - Leads: todas as urgências, leads sem responsável (pra testar "Assumir
---     lead"), leads convertidos em financiamento
+--     lead"), leads convertidos pelos dois caminhos reais de conversão —
+--     financiamento aprovado (L001/L008) e OS paga concluída (L004) — ver
+--     bloco 8 abaixo
 --   - Financiamentos: os 4 status (APROVADO/ANALISE/PENDENTE/REPROVADO),
 --     com e sem lead de origem, com e sem consultor responsável
 --   - Serviços/Agenda: os 4 status de ordem (PREVISTO/ANDAMENTO/CONCLUIDO/
---     CANCELADO) e as 3 prioridades (OK/RISCO/ATRASADO); técnicos nos 4
+--     CANCELADO); prazo/prioridade são sempre CALCULADOS em SQL a partir de
+--     um "prazoData" real (mesma regra de ServicoService/prioridade-os.util,
+--     ver bloco 12) — nunca mais um texto solto ("Hoje, 14:00") com uma
+--     prioridade hardcoded que podia contradizer a data; técnicos nos 4
 --     status (LIVRE/OCUPADO/PAUSA/AUSENTE); agendamentos nos 3 status
 --   - Clientes/Histórico: os 3 status, posse de veículos com troca/venda
 --   - Estoque: NOVO/SEMINOVO, item com quantidade baixa (aciona alerta)
 --   - Avaliações: nota de 2 a 5 (não só nota alta)
 --   - Metas: mix de metas batidas e não batidas, incl. indicador
 --     "lowerIsBetter" (SLA)
+--
+-- Sobre os leads convertidos (bloco 8): este script insere os dados via SQL
+-- direto, sem passar pela API — então os efeitos colaterais que
+-- FinanciamentoService.aprovar()/ServicoService.fecharAgendamentoEConverterLead
+-- fariam automaticamente (marcar Lead.convertido/clienteId, resolver/criar o
+-- Cliente) são reproduzidos aqui à mão, pros dois caminhos reais de
+-- conversão ficarem consistentes com o que a aplicação de fato produziria:
+--   - L001 (Carlos Silva) e L008 (Fernanda Alves) convertem via financiamento
+--     aprovado (F008/F009) — Cliente C011/C012 criados com ltv=0/veiculosCount=0
+--     porque nenhum dos dois financiamentos referencia item de estoque real
+--     (mesma regra: só incrementa posse/ltv quando há estoqueVeiculoId).
+--   - L004 (Patricia Nunes) reproduz o cenário validado nesta sessão: uma
+--     "Visita" sem cobrança (OS #4900, valor 0) que NÃO converte, seguida de
+--     uma revisão paga concluída (OS #4901, valor > 0) que converte de
+--     verdade — Cliente C013.
 --
 -- NÃO toca em: Colaborador admin/gerente/funcionario originais (login em
 -- uso), ConfiguracaoConcessionaria (dado real já configurado na tela de
@@ -35,7 +55,11 @@
 -- Datas são relativas a `now()` (meses/dias atrás), então o script continua
 -- válido em qualquer data em que for executado — só os campos de texto
 -- cosmético ("data": "Set 2026", "periodo": "Setembro/2026") ficam fixos ao
--- mês em que este script foi escrito, mesma convenção do prisma/seed.ts.
+-- mês em que este script foi escrito, mesma convenção do prisma/seed.ts. Pela
+-- mesma razão, a prioridade das OS em aberto (PREVISTO/ANDAMENTO) é sempre
+-- recalculada em SQL a partir de prazoData vs now() — o resultado exato
+-- (OK/RISCO/ATRASADO) pode variar um pouco dependendo de quando o script
+-- roda, do mesmo jeito que aconteceria em produção.
 --
 -- Login de consultores novos criados por este seed (senha em texto puro só
 -- aqui, documentada, mesmo padrão do prisma/seed.ts):
@@ -112,6 +136,10 @@ INSERT INTO "Tecnico" (id, nome, iniciais, especialidade, status, "createdAt", "
 -- ---------------------------------------------------------------------------
 -- 5. Clientes — os 3 status (ATIVO/INATIVO/POTENCIAL), createdAt espalhado
 --    nos últimos 6 meses pra alimentar o gráfico de retenção mensal.
+--    C011/C012/C013 são os clientes gerados pela conversão automática dos
+--    leads L001/L008 (financiamento aprovado) e L004 (OS paga concluída) —
+--    ltv=0/veiculosCount=0 porque nenhum dos três tem estoqueVeiculoId real
+--    associado, igual ao que a aplicação faria (ver bloco 8).
 -- ---------------------------------------------------------------------------
 INSERT INTO "Cliente" (id, codigo, nome, telefone, email, "ultimaVisita", status, "veiculosCount", ltv, iniciais, segmento, "createdAt", "updatedAt") VALUES
   (gen_random_uuid(), 'C001', 'Carlos Eduardo Mendes',  '(11) 98245-1122', 'carlos.mendes@gmail.com',  now() - interval '3 days',  'ATIVO',     3, 482300, 'CM', 'Premium',   now() - interval '5 months' - interval '3 days', now()),
@@ -123,7 +151,10 @@ INSERT INTO "Cliente" (id, codigo, nome, telefone, email, "ultimaVisita", status
   (gen_random_uuid(), 'C007', 'Paulo Ricardo Almeida',  '(11) 96677-8899', 'paulo.almeida@empresa.com', now() - interval '10 days', 'ATIVO',     4, 721400, 'PA', 'VIP',       now() - interval '5 months' - interval '9 days', now()),
   (gen_random_uuid(), 'C008', 'Cristina Menezes Rocha', '(11) 93344-5566', 'cristina.rocha@gmail.com', now() - interval '1 days',  'POTENCIAL', 1, 189000, 'CR', 'Premium',   now() - interval '3 days', now()),
   (gen_random_uuid(), 'C009', 'Alexandre Torres',       '(11) 91122-3344', 'alex.torres@gmail.com',    now() - interval '6 days',  'ATIVO',     2, 312600, 'AT', 'Executivo', now() - interval '2 months' - interval '5 days', now()),
-  (gen_random_uuid(), 'C010', 'Beatriz Oliveira Neves', '(11) 99988-7766', 'beatriz.neves@outlook.com', now() - interval '2 days',  'ATIVO',     1, 167400, 'BO', 'Familia',   now() - interval '1 months' - interval '18 days', now());
+  (gen_random_uuid(), 'C010', 'Beatriz Oliveira Neves', '(11) 99988-7766', 'beatriz.neves@outlook.com', now() - interval '2 days',  'ATIVO',     1, 167400, 'BO', 'Familia',   now() - interval '1 months' - interval '18 days', now()),
+  (gen_random_uuid(), 'C011', 'Carlos Silva',           '(11) 97788-4411', '',                          now() - interval '1 days',  'ATIVO',     0,      0, 'CS', 'Padrao',    now() - interval '1 days', now() - interval '1 days'),
+  (gen_random_uuid(), 'C012', 'Fernanda Alves',         '(11) 95566-7788', 'fernanda.alves@gmail.com', now() - interval '3 months' - interval '6 days', 'ATIVO', 0, 0, 'FA', 'Padrao', now() - interval '3 months' - interval '6 days', now() - interval '3 months' - interval '6 days'),
+  (gen_random_uuid(), 'C013', 'Patricia Nunes',         '(11) 99977-3344', 'patricia.nunes@outlook.com', now() - interval '2 days', 'ATIVO',    0,      0, 'PN', 'Padrao',    now() - interval '2 days', now() - interval '2 days');
 
 -- ---------------------------------------------------------------------------
 -- 6. Veículos por cliente (histórico de posse) — ATIVO/VENDIDO/SUBSTITUIDO.
@@ -165,24 +196,34 @@ INSERT INTO "EstoqueVeiculo" (id, codigo, modelo, versao, ano, motor, transmissa
 -- ---------------------------------------------------------------------------
 -- 8. Leads — todas urgências, com/sem responsável (testa "Assumir lead"),
 --    espalhados nos últimos 6 meses. L001 (URGENTE, maior valor) aciona o
---    alerta "Lead prioritário" e é o que vira financiamento (F008) abaixo.
+--    alerta "Lead prioritário".
+--
+--    convertido/clienteId refletem os dois caminhos reais de conversão
+--    (ver comentário do topo do arquivo):
+--      L001 Carlos Silva   → convertido via financiamento aprovado (F008) → C011
+--      L008 Fernanda Alves → convertido via financiamento aprovado (F009) → C012
+--      L004 Patricia Nunes → convertido via OS paga concluída (#4901)     → C013
+--    Os demais leads continuam convertido=false (ainda no funil ativo).
 -- ---------------------------------------------------------------------------
-INSERT INTO "Lead" (id, codigo, "clienteNome", iniciais, "veiculoInteresse", necessidade, urgencia, "valorEstimado", telefone, email, insight, "responsavelId", "createdAt", "updatedAt")
+INSERT INTO "Lead" (id, codigo, "clienteNome", iniciais, "veiculoInteresse", necessidade, urgencia, "valorEstimado", telefone, email, insight, "responsavelId", convertido, "clienteId", "createdAt", "updatedAt")
 SELECT gen_random_uuid(), l.codigo, l."clienteNome", l.iniciais, l."veiculoInteresse", l.necessidade, l.urgencia::"LeadUrgencia", l."valorEstimado", l.telefone, l.email, l.insight,
-       (SELECT id FROM "Colaborador" WHERE email = l.respEmail), l."createdAt", l."createdAt"
+       (SELECT id FROM "Colaborador" WHERE email = l.respEmail),
+       l.convertido,
+       (SELECT id FROM "Cliente" WHERE codigo = l.clienteCodigo),
+       l."createdAt", l."createdAt"
 FROM (VALUES
-  ('L001', 'Carlos Silva',     'CS', 'Ford Ranger Storm 2026',     'Upgrade de picape — vende Hilux',              'URGENTE', 299900::float, '(11) 97788-4411', NULL,                        'Cliente com historico de troca a cada 2 anos.', 'bruno.tanaka@ford.com.br',   now() - interval '2 days'),
-  ('L002', 'Maria Fernanda',   'MF', 'Ford Territory Titanium',    'Primeiro carro proprio — quer parcelar',        'ALTA',    179900::float, '(11) 98811-2233', 'maria.fernanda@gmail.com', '25 anos, recem-contratada.',                     'camila.duarte@ford.com.br',  now() - interval '1 days'),
-  ('L003', 'Rafael Costa',     'RC', 'Ford Mustang GT 5.0',        'Colecionador — quer edicao especial',           'MEDIA',   389900::float, '(11) 96644-0099', NULL,                        'Alto poder aquisitivo.',                         NULL,                          now() - interval '4 days'),
-  ('L011', 'Isabela Martins',  'IM', 'Ford Ranger XLS',            'Substituir carro por picape — trabalha em obra','MEDIA',   219900::float, '(11) 91199-2233', NULL,                        'Trabalha em obra, precisa de picape.',           'patricia.oliveira@ford.com.br', now() - interval '3 days'),
-  ('L004', 'Patricia Nunes',   'PN', 'Ford Maverick Hybrid',       'Substituir SUV urbano por picape compacta',     'ALTA',    189900::float, '(11) 99977-3344', 'patricia.nunes@outlook.com','Engenheira, valoriza eficiencia.',              'bruno.tanaka@ford.com.br',   now() - interval '1 months' - interval '5 days'),
-  ('L005', 'Diego Almeida',    'DA', 'Ford Bronco Sport Badlands', 'Trilhas nos fins de semana',                    'MEDIA',   209900::float, '(11) 94455-6677', NULL,                        'Perfil aventura.',                                NULL,                          now() - interval '1 months' - interval '12 days'),
-  ('L006', 'Camila Rocha',     'CR', 'Ford Ranger XLS',            'Uso rural — fazenda no interior',               'BAIXA',   219900::float, '(11) 93322-5588', NULL,                        'Proprietaria rural.',                             'camila.duarte@ford.com.br',  now() - interval '2 months' - interval '6 days'),
-  ('L007', 'Eduardo Martins',  'EM', 'Ford Territory SE',          'Troca de veiculo da familia',                   'ALTA',    149900::float, '(11) 92211-6688', 'eduardo.martins@gmail.com','Familia com 2 filhos pequenos.',                'patricia.oliveira@ford.com.br', now() - interval '2 months' - interval '15 days'),
-  ('L008', 'Fernanda Alves',   'FA', 'Ford Bronco Sport Wildtrak', 'Primeiro SUV — troca de sedan',                 'ALTA',    194900::float, '(11) 95566-7788', 'fernanda.alves@gmail.com','Indicacao de cliente atual.',                    'ricardo.costa@ford.com.br',  now() - interval '3 months' - interval '8 days'),
-  ('L009', 'Gustavo Pereira',  'GP', 'Ford Maverick Hybrid',       'Uso comercial — entregas',                      'BAIXA',   169900::float, '(11) 94433-2211', NULL,                        'Autonomo, usa para trabalho.',                    NULL,                          now() - interval '4 months' - interval '10 days'),
-  ('L010', 'Helena Castro',    'HC', 'Ford Ranger Storm',          'Substituir picape antiga com defeito',          'URGENTE', 259900::float, '(11) 93300-4455', 'helena.castro@gmail.com', 'Picape atual quebrou, urgencia real.',           'bruno.tanaka@ford.com.br',   now() - interval '5 months' - interval '3 days')
-) AS l(codigo, "clienteNome", iniciais, "veiculoInteresse", necessidade, urgencia, "valorEstimado", telefone, email, insight, respEmail, "createdAt");
+  ('L001', 'Carlos Silva',     'CS', 'Ford Ranger Storm 2026',     'Upgrade de picape — vende Hilux',              'URGENTE', 299900::float, '(11) 97788-4411', NULL,                        'Cliente com historico de troca a cada 2 anos.', 'bruno.tanaka@ford.com.br',   true,  'C011', now() - interval '2 days'),
+  ('L002', 'Maria Fernanda',   'MF', 'Ford Territory Titanium',    'Primeiro carro proprio — quer parcelar',        'ALTA',    179900::float, '(11) 98811-2233', 'maria.fernanda@gmail.com', '25 anos, recem-contratada.',                     'camila.duarte@ford.com.br',  false, NULL,   now() - interval '1 days'),
+  ('L003', 'Rafael Costa',     'RC', 'Ford Mustang GT 5.0',        'Colecionador — quer edicao especial',           'MEDIA',   389900::float, '(11) 96644-0099', NULL,                        'Alto poder aquisitivo.',                         NULL,                          false, NULL,   now() - interval '4 days'),
+  ('L011', 'Isabela Martins',  'IM', 'Ford Ranger XLS',            'Substituir carro por picape — trabalha em obra','MEDIA',   219900::float, '(11) 91199-2233', NULL,                        'Trabalha em obra, precisa de picape.',           'patricia.oliveira@ford.com.br', false, NULL, now() - interval '3 days'),
+  ('L004', 'Patricia Nunes',   'PN', 'Ford Maverick Hybrid',       'Substituir SUV urbano por picape compacta',     'ALTA',    189900::float, '(11) 99977-3344', 'patricia.nunes@outlook.com','Engenheira, valoriza eficiencia.',              'bruno.tanaka@ford.com.br',   true,  'C013', now() - interval '1 months' - interval '5 days'),
+  ('L005', 'Diego Almeida',    'DA', 'Ford Bronco Sport Badlands', 'Trilhas nos fins de semana',                    'MEDIA',   209900::float, '(11) 94455-6677', NULL,                        'Perfil aventura.',                                NULL,                          false, NULL,   now() - interval '1 months' - interval '12 days'),
+  ('L006', 'Camila Rocha',     'CR', 'Ford Ranger XLS',            'Uso rural — fazenda no interior',               'BAIXA',   219900::float, '(11) 93322-5588', NULL,                        'Proprietaria rural.',                             'camila.duarte@ford.com.br',  false, NULL,   now() - interval '2 months' - interval '6 days'),
+  ('L007', 'Eduardo Martins',  'EM', 'Ford Territory SE',          'Troca de veiculo da familia',                   'ALTA',    149900::float, '(11) 92211-6688', 'eduardo.martins@gmail.com','Familia com 2 filhos pequenos.',                'patricia.oliveira@ford.com.br', false, NULL, now() - interval '2 months' - interval '15 days'),
+  ('L008', 'Fernanda Alves',   'FA', 'Ford Bronco Sport Wildtrak', 'Primeiro SUV — troca de sedan',                 'ALTA',    194900::float, '(11) 95566-7788', 'fernanda.alves@gmail.com','Indicacao de cliente atual.',                    'ricardo.costa@ford.com.br',  true,  'C012', now() - interval '3 months' - interval '8 days'),
+  ('L009', 'Gustavo Pereira',  'GP', 'Ford Maverick Hybrid',       'Uso comercial — entregas',                      'BAIXA',   169900::float, '(11) 94433-2211', NULL,                        'Autonomo, usa para trabalho.',                    NULL,                          false, NULL,   now() - interval '4 months' - interval '10 days'),
+  ('L010', 'Helena Castro',    'HC', 'Ford Ranger Storm',          'Substituir picape antiga com defeito',          'URGENTE', 259900::float, '(11) 93300-4455', 'helena.castro@gmail.com', 'Picape atual quebrou, urgencia real.',           'bruno.tanaka@ford.com.br',   false, NULL,   now() - interval '5 months' - interval '3 days')
+) AS l(codigo, "clienteNome", iniciais, "veiculoInteresse", necessidade, urgencia, "valorEstimado", telefone, email, insight, respEmail, convertido, clienteCodigo, "createdAt");
 
 -- ---------------------------------------------------------------------------
 -- 9. Financiamentos — os 4 status, com/sem lead de origem (F008/F009
@@ -230,56 +271,95 @@ INSERT INTO "Avaliacao" (id, cliente, nota, data, texto, detalhe, "createdAt", "
   (gen_random_uuid(), 'Cristina Menezes Rocha', 3, to_char(now() - interval '18 days', 'DD/MM/YYYY'), 'Atendimento razoavel, esperava mais agilidade.',           'Servico: Diagnostico eletronico - Veiculo: Territory SE', now(), now());
 
 -- ---------------------------------------------------------------------------
--- 12. Ordens de Serviço — 4 status (PREVISTO/ANDAMENTO/CONCLUIDO/CANCELADO),
---     3 prioridades (OK/RISCO/ATRASADO), espalhadas nos últimos 6 meses
---     (histórico pra série de receita) + hoje/amanhã (agenda do dia).
+-- 12. Ordens de Serviço — 4 status (PREVISTO/ANDAMENTO/CONCLUIDO/CANCELADO).
+--
+--     prazo (texto) e prioridade NÃO são mais literais soltos — são
+--     calculados aqui a partir de um "prazoData" real, com a MESMA regra do
+--     backend (ServicoService / prioridade-os.util.ts / HORAS_RISCO=24h):
+--       ATRASADO se prazoData já passou, RISCO se falta ≤24h, senão OK.
+--     OS fechada (CONCLUIDO/CANCELADO) fica com prioridade OK congelada —
+--     o job de reavaliação automática (reavaliarPrioridadeDasOS) só toca em
+--     OS aberta, então uma OS encerrada nunca teria essa prioridade
+--     recalculada de verdade; travar em OK evita um "Atrasado" artificial
+--     em job que já fechou com sucesso.
+--
+--     #4831..#4835 (PREVISTO) e #4821..#4823 (ANDAMENTO) usam prazoData
+--     relativo a now() — pensado pra sair com uma boa mistura de OK/RISCO/
+--     ATRASADO (alimenta o alerta "SLA em risco" do Dashboard) não importa
+--     quando o script rodar. #4900/#4901 reproduzem o cenário validado
+--     nesta sessão pra Patricia Nunes (L004): uma "Visita" sem cobrança que
+--     NÃO converte o lead, seguida de uma revisão paga que converte de
+--     verdade (ver bloco 8 e bloco 13).
 -- ---------------------------------------------------------------------------
-INSERT INTO "OrdemServico" (id, numero, cliente, veiculo, tipo, tecnico, prazo, prioridade, valor, status, "createdAt", "updatedAt") VALUES
-  -- Hoje / amanhã — PREVISTO
-  (gen_random_uuid(), '#4831', 'Carlos Mendes',    'Bronco Sport 2024',  'Revisao 20.000 km',               'Andre Souza',    'Hoje, 14:00',      'RISCO',    1840, 'PREVISTO',  now(), now()),
-  (gen_random_uuid(), '#4832', 'Ana Rodrigues',    'Territory 2023',     'Alinhamento + balanceamento',      'Eduardo Lima',   'Hoje, 16:00',      'OK',       480,  'PREVISTO',  now(), now()),
-  (gen_random_uuid(), '#4833', 'Fernanda Costa',   'Ranger Storm 2022',  'Revisao 30.000 km',                'Andre Souza',    'Amanha, 09:00',    'OK',       3200, 'PREVISTO',  now(), now()),
-  (gen_random_uuid(), '#4834', 'Paulo Almeida',    'Maverick 2024',      'Troca de pneus',                   'Marcos Vieira',  'Amanha, 11:00',    'OK',       2100, 'PREVISTO',  now(), now()),
-  (gen_random_uuid(), '#4835', 'Beatriz Neves',    'Ka Sedan 2021',      'Revisao 15.000 km',                'Eduardo Lima',   'Semana que vem',   'OK',       1100, 'PREVISTO',  now(), now()),
+INSERT INTO "OrdemServico" (id, numero, cliente, veiculo, tipo, tecnico, prazo, "prazoData", prioridade, valor, status, "createdAt", "updatedAt")
+SELECT gen_random_uuid(), o.numero, o.cliente, o.veiculo, o.tipo, o.tecnico,
+       to_char(o."prazoData" AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY, HH24:MI'),
+       o."prazoData",
+       (CASE
+          WHEN o.status IN ('CONCLUIDO', 'CANCELADO') THEN 'OK'
+          WHEN o."prazoData" < now() THEN 'ATRASADO'
+          WHEN o."prazoData" < now() + interval '24 hours' THEN 'RISCO'
+          ELSE 'OK'
+        END)::"OrdemServicoPrioridade",
+       o.valor, o.status::"OrdemServicoStatus", o."createdAt", o."updatedAt"
+FROM (VALUES
+  -- Em aberto (PREVISTO) — mistura de OK/RISCO/ATRASADO calculada de verdade
+  ('#4831', 'Carlos Mendes',    'Bronco Sport 2024',  'Revisao 20.000 km',               'Andre Souza',    now() + interval '4 hours',   1840::float, 'PREVISTO',  now(), now()),
+  ('#4832', 'Ana Rodrigues',    'Territory 2023',     'Alinhamento + balanceamento',      'Eduardo Lima',   now() + interval '30 hours',  480::float,  'PREVISTO',  now(), now()),
+  ('#4833', 'Fernanda Costa',   'Ranger Storm 2022',  'Revisao 30.000 km',                'Andre Souza',    now() + interval '2 days',    3200::float, 'PREVISTO',  now(), now()),
+  ('#4834', 'Paulo Almeida',    'Maverick 2024',      'Troca de pneus',                   'Marcos Vieira',  now() + interval '3 days',    2100::float, 'PREVISTO',  now(), now()),
+  ('#4835', 'Beatriz Neves',    'Ka Sedan 2021',      'Revisao 15.000 km',                'Eduardo Lima',   now() + interval '7 days',    1100::float, 'PREVISTO',  now(), now()),
   -- Em andamento agora
-  (gen_random_uuid(), '#4821', 'Juliana Cardoso',  'Territory SE 2023',  'Reparo eletrico - Sensor airbag',  'Bruna Castro',   'Hoje, 12:00',      'ATRASADO', 2400, 'ANDAMENTO', now() - interval '2 days', now()),
-  (gen_random_uuid(), '#4822', 'Marcelo Pires',    'Ecosport 2020',      'Funilaria - Porta dianteira',      'Diego Ferreira', 'Hoje, 15:00',      'RISCO',    4200, 'ANDAMENTO', now() - interval '1 days', now()),
-  (gen_random_uuid(), '#4823', 'Alexandre Torres', 'Ranger Storm 2022',  'Substituicao de correias',         'Andre Souza',    'Hoje, 17:00',      'OK',       1900, 'ANDAMENTO', now(), now()),
+  ('#4821', 'Juliana Cardoso',  'Territory SE 2023',  'Reparo eletrico - Sensor airbag',  'Bruna Castro',   now() - interval '5 hours',   2400::float, 'ANDAMENTO', now() - interval '2 days', now()),
+  ('#4822', 'Marcelo Pires',    'Ecosport 2020',      'Funilaria - Porta dianteira',      'Diego Ferreira', now() + interval '10 hours',  4200::float, 'ANDAMENTO', now() - interval '1 days', now()),
+  ('#4823', 'Alexandre Torres', 'Ranger Storm 2022',  'Substituicao de correias',         'Andre Souza',    now() + interval '18 hours',  1900::float, 'ANDAMENTO', now(), now()),
   -- Concluídas neste mês (produtividade + receita do mês corrente)
-  (gen_random_uuid(), '#4810', 'Jose Melo',        'Ka Sedan 2020',      'Revisao 60.000 km',                'Andre Souza',    'Concluido',        'OK',       2100, 'CONCLUIDO', now() - interval '3 days', now() - interval '2 days'),
-  (gen_random_uuid(), '#4811', 'Mariana Silva',    'Territory 2022',     'Alinhamento e balanceamento',      'Eduardo Lima',   'Concluido',        'OK',       480,  'CONCLUIDO', now() - interval '4 days', now() - interval '4 days' + interval '3 hours'),
-  (gen_random_uuid(), '#4812', 'Paulo Almeida',    'Bronco Sport 2024',  'Revisao 10.000 km',                'Marcos Vieira',  'Concluido',        'OK',       1240, 'CONCLUIDO', now() - interval '5 days', now() - interval '4 days'),
-  (gen_random_uuid(), '#4813', 'Fernanda Costa',   'Maverick 2024',      'Instalacao de acessorios',         'Diego Ferreira', 'Concluido',        'OK',       3800, 'CONCLUIDO', now() - interval '6 days', now() - interval '5 days'),
+  ('#4810', 'Jose Melo',        'Ka Sedan 2020',      'Revisao 60.000 km',                'Andre Souza',    now() - interval '2 days',    2100::float, 'CONCLUIDO', now() - interval '3 days', now() - interval '2 days'),
+  ('#4811', 'Mariana Silva',    'Territory 2022',     'Alinhamento e balanceamento',      'Eduardo Lima',   now() - interval '4 days',    480::float,  'CONCLUIDO', now() - interval '4 days', now() - interval '4 days' + interval '3 hours'),
+  ('#4812', 'Paulo Almeida',    'Bronco Sport 2024',  'Revisao 10.000 km',                'Marcos Vieira',  now() - interval '4 days',    1240::float, 'CONCLUIDO', now() - interval '5 days', now() - interval '4 days'),
+  ('#4813', 'Fernanda Costa',   'Maverick 2024',      'Instalacao de acessorios',         'Diego Ferreira', now() - interval '5 days',    3800::float, 'CONCLUIDO', now() - interval '6 days', now() - interval '5 days'),
   -- Cancelada
-  (gen_random_uuid(), '#4840', 'Cristina Rocha',   'Territory SE 2023',  'Revisao 5.000 km',                 'Flavia Mendes',  'Cancelado pelo cliente', 'OK', 950, 'CANCELADO', now() - interval '10 days', now() - interval '9 days'),
+  ('#4840', 'Cristina Rocha',   'Territory SE 2023',  'Revisao 5.000 km',                 'Flavia Mendes',  now() - interval '9 days',    950::float,  'CANCELADO', now() - interval '10 days', now() - interval '9 days'),
   -- Histórico — meses anteriores (série de receita/trimestral)
-  (gen_random_uuid(), '#4750', 'Ana Rodrigues',      'Territory 2023',      'Revisao 30.000 km',   'Andre Souza',   'Concluido', 'OK', 2900, 'CONCLUIDO', now() - interval '1 months' - interval '3 days', now() - interval '1 months' - interval '2 days'),
-  (gen_random_uuid(), '#4751', 'Carlos Mendes',      'Bronco Sport 2024',   'Troca de oleo',        'Marcos Vieira', 'Concluido', 'OK', 650,  'CONCLUIDO', now() - interval '1 months' - interval '13 days', now() - interval '1 months' - interval '13 days' + interval '4 hours'),
-  (gen_random_uuid(), '#4700', 'Roberto Figueiredo', 'Mustang GT 2024',     'Revisao 5.000 km',     'Eduardo Lima',  'Concluido', 'OK', 1450, 'CONCLUIDO', now() - interval '2 months' - interval '5 days', now() - interval '2 months' - interval '4 days'),
-  (gen_random_uuid(), '#4701', 'Beatriz Neves',      'Ka Sedan 2021',       'Funilaria leve',       'Bruna Castro',  'Concluido', 'OK', 2200, 'CONCLUIDO', now() - interval '2 months' - interval '15 days', now() - interval '2 months' - interval '13 days'),
-  (gen_random_uuid(), '#4650', 'Alexandre Torres',   'Ranger XLS 2026',     'Revisao 10.000 km',    'Andre Souza',   'Concluido', 'OK', 1240, 'CONCLUIDO', now() - interval '3 months' - interval '5 days', now() - interval '3 months' - interval '4 days'),
-  (gen_random_uuid(), '#4600', 'Paulo Almeida',      'Bronco Sport Wildtrak','Revisao 20.000 km',   'Marcos Vieira', 'Concluido', 'OK', 1840, 'CONCLUIDO', now() - interval '4 months' - interval '10 days', now() - interval '4 months' - interval '9 days'),
-  (gen_random_uuid(), '#4550', 'Carlos Eduardo Mendes','Bronco Sport Badlands','Revisao 30.000 km', 'Andre Souza',   'Concluido', 'OK', 2900, 'CONCLUIDO', now() - interval '5 months' - interval '6 days', now() - interval '5 months' - interval '5 days');
+  ('#4750', 'Ana Rodrigues',      'Territory 2023',      'Revisao 30.000 km',   'Andre Souza',   now() - interval '1 months' - interval '2 days',  2900::float, 'CONCLUIDO', now() - interval '1 months' - interval '3 days', now() - interval '1 months' - interval '2 days'),
+  ('#4751', 'Carlos Mendes',      'Bronco Sport 2024',   'Troca de oleo',        'Marcos Vieira', now() - interval '1 months' - interval '13 days', 650::float,  'CONCLUIDO', now() - interval '1 months' - interval '13 days', now() - interval '1 months' - interval '13 days' + interval '4 hours'),
+  ('#4700', 'Roberto Figueiredo', 'Mustang GT 2024',     'Revisao 5.000 km',     'Eduardo Lima',  now() - interval '2 months' - interval '4 days',  1450::float, 'CONCLUIDO', now() - interval '2 months' - interval '5 days', now() - interval '2 months' - interval '4 days'),
+  ('#4701', 'Beatriz Neves',      'Ka Sedan 2021',       'Funilaria leve',       'Bruna Castro',  now() - interval '2 months' - interval '13 days', 2200::float, 'CONCLUIDO', now() - interval '2 months' - interval '15 days', now() - interval '2 months' - interval '13 days'),
+  ('#4650', 'Alexandre Torres',   'Ranger XLS 2026',     'Revisao 10.000 km',    'Andre Souza',   now() - interval '3 months' - interval '4 days',  1240::float, 'CONCLUIDO', now() - interval '3 months' - interval '5 days', now() - interval '3 months' - interval '4 days'),
+  ('#4600', 'Paulo Almeida',      'Bronco Sport Wildtrak','Revisao 20.000 km',   'Marcos Vieira', now() - interval '4 months' - interval '9 days',  1840::float, 'CONCLUIDO', now() - interval '4 months' - interval '10 days', now() - interval '4 months' - interval '9 days'),
+  ('#4550', 'Carlos Eduardo Mendes','Bronco Sport Badlands','Revisao 30.000 km', 'Andre Souza',   now() - interval '5 months' - interval '5 days',  2900::float, 'CONCLUIDO', now() - interval '5 months' - interval '6 days', now() - interval '5 months' - interval '5 days'),
+  -- Patricia Nunes (L004) — cenário de conversão via OS paga, validado nesta
+  -- sessão: a Visita (valor 0) não converte; a revisão paga concluída, sim.
+  ('#4900', 'Patricia Nunes',     'Maverick Hybrid 2026', 'Visita',              'Eduardo Lima',  now() - interval '10 days',               0::float,    'CONCLUIDO', now() - interval '10 days', now() - interval '10 days'),
+  ('#4901', 'Patricia Nunes',     'Maverick Hybrid 2026', 'Revisao 10.000 km',   'Eduardo Lima',  now() - interval '2 days',                1850::float, 'CONCLUIDO', now() - interval '2 days', now() - interval '2 days')
+) AS o(numero, cliente, veiculo, tipo, tecnico, "prazoData", valor, status, "createdAt", "updatedAt");
 
 -- ---------------------------------------------------------------------------
--- 13. Agendamentos — AGENDADO/CANCELADO/CONCLUIDO, incluindo 2 vinculados a
---     leads (fluxo real "Agendar" a partir da tela de Leads).
+-- 13. Agendamentos — AGENDADO/CANCELADO/CONCLUIDO, incluindo os vinculados a
+--     leads (fluxo real "Agendar" a partir da tela de Leads). Os dois
+--     últimos são o par Visita→Revisão da Patricia Nunes (bloco 12): cada
+--     um aponta pro seu "ordemServicoId" real, igual ao que
+--     LifecycleJobsService.gerarOrdensDeServicoDeAgendamentos faria sozinho
+--     quando a data do agendamento chega.
 -- ---------------------------------------------------------------------------
-INSERT INTO "Agendamento" (id, cliente, servico, tecnico, "dataHora", status, "leadId", "createdAt", "updatedAt") VALUES
-  (gen_random_uuid(), 'Carlos Mendes',   'Revisao 10.000 km',                   'Andre Souza',  (CURRENT_DATE + time '07:30'), 'AGENDADO', NULL, now(), now()),
-  (gen_random_uuid(), 'Ana Rodrigues',   'Alinhamento',                          'Eduardo Lima', (CURRENT_DATE + time '08:00'), 'AGENDADO', NULL, now(), now()),
-  (gen_random_uuid(), 'Fernanda Costa',  'Revisao 30.000 km',                    'Andre Souza',  (CURRENT_DATE + time '09:00'), 'AGENDADO', NULL, now(), now()),
-  (gen_random_uuid(), 'Juliana Cardoso', 'OS URGENTE - Eletrico',                'Bruna Castro', (CURRENT_DATE + time '10:30'), 'AGENDADO', NULL, now(), now()),
-  (gen_random_uuid(), 'Beatriz Neves',   'Revisao 15.000 km',                    'Eduardo Lima', (CURRENT_DATE + time '12:00'), 'AGENDADO', NULL, now(), now()),
-  (gen_random_uuid(), 'Carlos Silva',    'Visita — test drive Ranger Storm',     NULL,           (CURRENT_DATE + time '10:00' + interval '1 day'), 'AGENDADO', (SELECT id FROM "Lead" WHERE codigo = 'L001'), now() - interval '1 days', now() - interval '1 days'),
-  (gen_random_uuid(), 'Fernanda Alves',  'Entrega do veiculo financiado',        NULL,           (CURRENT_DATE + time '11:00' - interval '2 days'), 'CONCLUIDO', (SELECT id FROM "Lead" WHERE codigo = 'L008'), now() - interval '4 days', now() - interval '2 days'),
-  (gen_random_uuid(), 'Diego Almeida',   'Test drive Bronco Sport',              NULL,           (CURRENT_DATE + time '15:00' - interval '3 days'), 'CANCELADO', (SELECT id FROM "Lead" WHERE codigo = 'L005'), now() - interval '5 days', now() - interval '3 days');
+INSERT INTO "Agendamento" (id, cliente, servico, tecnico, "dataHora", status, "leadId", "ordemServicoId", "createdAt", "updatedAt") VALUES
+  (gen_random_uuid(), 'Carlos Mendes',   'Revisao 10.000 km',                   'Andre Souza',  (CURRENT_DATE + time '07:30'), 'AGENDADO', NULL, NULL, now(), now()),
+  (gen_random_uuid(), 'Ana Rodrigues',   'Alinhamento',                          'Eduardo Lima', (CURRENT_DATE + time '08:00'), 'AGENDADO', NULL, NULL, now(), now()),
+  (gen_random_uuid(), 'Fernanda Costa',  'Revisao 30.000 km',                    'Andre Souza',  (CURRENT_DATE + time '09:00'), 'AGENDADO', NULL, NULL, now(), now()),
+  (gen_random_uuid(), 'Juliana Cardoso', 'OS URGENTE - Eletrico',                'Bruna Castro', (CURRENT_DATE + time '10:30'), 'AGENDADO', NULL, NULL, now(), now()),
+  (gen_random_uuid(), 'Beatriz Neves',   'Revisao 15.000 km',                    'Eduardo Lima', (CURRENT_DATE + time '12:00'), 'AGENDADO', NULL, NULL, now(), now()),
+  (gen_random_uuid(), 'Carlos Silva',    'Visita — test drive Ranger Storm',     NULL,           (CURRENT_DATE + time '10:00' + interval '1 day'), 'AGENDADO', (SELECT id FROM "Lead" WHERE codigo = 'L001'), NULL, now() - interval '1 days', now() - interval '1 days'),
+  (gen_random_uuid(), 'Fernanda Alves',  'Entrega do veiculo financiado',        NULL,           (CURRENT_DATE + time '11:00' - interval '2 days'), 'CONCLUIDO', (SELECT id FROM "Lead" WHERE codigo = 'L008'), NULL, now() - interval '4 days', now() - interval '2 days'),
+  (gen_random_uuid(), 'Diego Almeida',   'Test drive Bronco Sport',              NULL,           (CURRENT_DATE + time '15:00' - interval '3 days'), 'CANCELADO', (SELECT id FROM "Lead" WHERE codigo = 'L005'), NULL, now() - interval '5 days', now() - interval '3 days'),
+  (gen_random_uuid(), 'Patricia Nunes',  'Visita',                               NULL,           (now() - interval '10 days'), 'CONCLUIDO', (SELECT id FROM "Lead" WHERE codigo = 'L004'), (SELECT id FROM "OrdemServico" WHERE numero = '#4900'), now() - interval '10 days', now() - interval '10 days'),
+  (gen_random_uuid(), 'Patricia Nunes',  'Revisao 10.000 km',                    NULL,           (now() - interval '2 days'),  'CONCLUIDO', (SELECT id FROM "Lead" WHERE codigo = 'L004'), (SELECT id FROM "OrdemServico" WHERE numero = '#4901'), now() - interval '2 days', now() - interval '2 days');
 
 COMMIT;
 
 -- ============================================================================
 -- Fim. Resumo esperado após execução:
---   Colaborador +3 (ativos: 2, inativo: 1) · Tecnico 7 · Cliente 10
---   VeiculoCliente 7 · EstoqueVeiculo 8 · Lead 11 · Financiamento 10
---   Meta 6 · Avaliacao 7 · OrdemServico 20 · Agendamento 8 · AuditLog 0
+--   Colaborador +3 (ativos: 2, inativo: 1) · Tecnico 7 · Cliente 13
+--   VeiculoCliente 7 · EstoqueVeiculo 8 · Lead 11 (3 convertidos) ·
+--   Financiamento 10 · Meta 6 · Avaliacao 7 · OrdemServico 22 ·
+--   Agendamento 10 · AuditLog 0
 -- ============================================================================
