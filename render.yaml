@@ -30,11 +30,8 @@ services:
         value: "true"
       - key: LOG_LEVEL
         value: info
-      # Placeholder pra não travar o boot (o app recusa subir com CORS_ORIGINS
-      # vazio/"*" em produção) — troque pelas URLs reais do Cloudflare Pages
-      # assim que existirem (passo 5 do DEPLOY.md).
       - key: CORS_ORIGINS
-        value: https://placeholder.pages.dev
+        value: https://ford-one.pages.dev,https://ford-one-dealership.pages.dev
       # ---- Preenchidos na hora da criação do Blueprint (Render pergunta um
       # a um) — nunca ficam commitados com valor real neste arquivo. ----
       - key: DATABASE_URL # connection string DIRETA do Neon (sem "-pooler")
