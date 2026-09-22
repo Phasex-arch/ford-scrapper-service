@@ -101,20 +101,20 @@ enum Role {
 }
 
 model Colaborador {
-  id        String     @id @default(uuid())
-  nome      String
-  cpf       String     @unique
-  telefone  String
-  email     String     @unique
-  endereco  String
-  registro  String     @unique
-  cargo     String
-  role      Role       @default(FUNCIONARIO)
-  senha     String
-  ativo     Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  auditLogs AuditLog[]
+  id                        String          @id @default(uuid())
+  nome                      String
+  cpf                       String          @unique
+  telefone                  String
+  email                     String          @unique
+  endereco                  String
+  registro                  String          @unique
+  cargo                     String
+  role                      Role            @default(FUNCIONARIO)
+  senha                     String
+  ativo                     Boolean         @default(true)
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  auditLogs                 AuditLog[]
   leadsResponsavel          Lead[]          @relation("LeadResponsavel")
   financiamentosResponsavel Financiamento[] @relation("FinanciamentoResponsavel")
   metasResponsavel          Meta[]          @relation("MetaResponsavel")
@@ -169,7 +169,11 @@ model Cliente {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  veiculos VeiculoCliente[]
+  veiculos         VeiculoCliente[]
+  leadsConvertidos Lead[]           @relation("LeadConvertido")
+  reservas         EstoqueVeiculo[]
+  agendamentos     Agendamento[]
+  ordensServico    OrdemServico[]
 
   @@index([status])
   @@index([segmento])
@@ -212,17 +216,28 @@ model VeiculoCliente {
   @@index([estoqueVeiculoId])
 }
 
+enum AvaliacaoStatus {
+  PENDENTE
+  APROVADA
+  REJEITADA
+}
+
 model Avaliacao {
-  id        String   @id @default(uuid())
+  id        String          @id @default(uuid())
   cliente   String
   nota      Int
   data      String
   texto     String
   detalhe   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Nasce PENDENTE sempre (endpoint público) — só entra na listagem/stats
+  // públicas depois que ADMIN/GERENTE aprova (ver auditoria, seção 2/3:
+  // antes não existia moderação nenhuma).
+  status    AvaliacaoStatus @default(PENDENTE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 
   @@index([nota])
+  @@index([status])
 }
 
 enum CondicaoVeiculo {
@@ -239,31 +254,41 @@ enum SegmentoVeiculo {
 }
 
 model EstoqueVeiculo {
-  id          String          @id @default(uuid())
-  codigo      String          @unique
-  modelo      String
-  versao      String
-  ano         String
-  motor       String
-  transmissao String
-  condicao    CondicaoVeiculo
-  status      String          @default("Disponivel")
-  preco       Float
-  segmento    SegmentoVeiculo
-  cor         String
-  imagem      String?
-  quantidade  Int             @default(1)
-  km          String?
-  opcionais   String[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id                 String          @id @default(uuid())
+  codigo             String          @unique
+  modelo             String
+  versao             String
+  ano                String
+  motor              String
+  transmissao        String
+  condicao           CondicaoVeiculo
+  status             String          @default("Disponivel")
+  preco              Float
+  segmento           SegmentoVeiculo
+  cor                String
+  imagem             String?
+  quantidade         Int             @default(1)
+  km                 String?
+  opcionais          String[]
+  // Reserva real (POST /estoque/:id/reservar) — vínculo com um Cliente real
+  // e prazo de validade, liberada automaticamente se expirar (ver
+  // LifecycleJobsService.liberarReservasExpiradas). status vira "Reservado"
+  // enquanto isso, e volta pra "Disponivel" sozinho na liberação.
+  reservadoClienteId String?
+  reservadoCliente   Cliente?        @relation(fields: [reservadoClienteId], references: [id], onDelete: SetNull)
+  reservadoAte       DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
-  vendas VeiculoCliente[]
+  vendas         VeiculoCliente[]
+  financiamentos Financiamento[]
+  leadsInteresse Lead[]
 
   @@index([modelo])
   @@index([condicao])
   @@index([status])
   @@index([segmento])
+  @@index([reservadoClienteId])
 }
 
 enum FinanciamentoStatus {
@@ -274,29 +299,37 @@ enum FinanciamentoStatus {
 }
 
 model Financiamento {
-  id          String              @id @default(uuid())
-  codigo      String              @unique
-  clienteNome String
-  iniciais    String
-  veiculo     String
-  valor       Float
-  entrada     Float
-  prazo       Int
-  taxa        Float
-  parcela     Float
-  status      FinanciamentoStatus @default(ANALISE)
-  data        String
-  leadId      String?
-  lead        Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  responsavelId String?
-  responsavel   Colaborador?      @relation("FinanciamentoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id               String              @id @default(uuid())
+  codigo           String              @unique
+  clienteNome      String
+  iniciais         String
+  veiculo          String
+  valor            Float
+  entrada          Float
+  prazo            Int
+  taxa             Float
+  parcela          Float
+  status           FinanciamentoStatus @default(ANALISE)
+  data             String
+  leadId           String?
+  lead             Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  responsavelId    String?
+  responsavel      Colaborador?        @relation("FinanciamentoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  // Vínculo opcional com o item real de estoque — quando setado, aprovar o
+  // financiamento decrementa EstoqueVeiculo.quantidade e gera o VeiculoCliente
+  // automaticamente (ver FinanciamentoService.aprovar). Nulo em contratos
+  // legados/sem correspondência exata no estoque — o campo `veiculo` (texto
+  // livre) continua existindo pra exibição nesses casos.
+  estoqueVeiculoId String?
+  estoqueVeiculo   EstoqueVeiculo?     @relation(fields: [estoqueVeiculoId], references: [id], onDelete: SetNull)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([status])
   @@index([clienteNome])
   @@index([leadId])
   @@index([responsavelId])
+  @@index([estoqueVeiculoId])
 }
 
 enum LeadUrgencia {
@@ -307,21 +340,39 @@ enum LeadUrgencia {
 }
 
 model Lead {
-  id               String       @id @default(uuid())
-  codigo           String       @unique
+  id               String          @id @default(uuid())
+  codigo           String          @unique
   clienteNome      String
   iniciais         String
+  // veiculoInteresse continua String pra caber tanto texto livre (o que o
+  // visitante digitou no formulário público, antes de alguém confirmar o
+  // modelo exato) quanto o nome resolvido de um item real do estoque
+  // quando estoqueVeiculoId é setado (ver LeadService.associarVeiculo) —
+  // mesmo padrão de cache-de-leitura usado em Agendamento/OrdemServico.
   veiculoInteresse String
+  estoqueVeiculoId String?
+  estoqueVeiculo   EstoqueVeiculo? @relation(fields: [estoqueVeiculoId], references: [id], onDelete: SetNull)
   necessidade      String
-  urgencia         LeadUrgencia @default(MEDIA)
+  urgencia         LeadUrgencia    @default(MEDIA)
   valorEstimado    Float
   telefone         String
   email            String?
   insight          String?
   responsavelId    String?
-  responsavel      Colaborador? @relation("LeadResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  responsavel      Colaborador?    @relation("LeadResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  // Marcados automaticamente quando um Financiamento vinculado a este lead é
+  // aprovado (ver FinanciamentoService.aprovar) — nunca setados manualmente
+  // por uma tela. clienteId aponta pro Cliente encontrado/criado na hora.
+  convertido       Boolean         @default(false)
+  clienteId        String?
+  cliente          Cliente?        @relation("LeadConvertido", fields: [clienteId], references: [id], onDelete: SetNull)
+  // Timestamp explícito de contato real (POST /leads/:id/contato, ex.: "Ligar
+  // agora") — não reaproveita updatedAt porque qualquer PATCH genérico (ex.:
+  // atribuir responsável) também mudaria updatedAt sem significar contato de
+  // verdade. É o sinal que o job de reavaliação de urgência usa.
+  ultimoContatoEm  DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   financiamentos Financiamento[]
   agendamentos   Agendamento[]
@@ -329,6 +380,8 @@ model Lead {
   @@index([urgencia])
   @@index([clienteNome])
   @@index([responsavelId])
+  @@index([clienteId])
+  @@index([estoqueVeiculoId])
 }
 
 enum AgendamentoStatus {
@@ -338,42 +391,58 @@ enum AgendamentoStatus {
 }
 
 model Agendamento {
-  id        String            @id @default(uuid())
-  cliente   String
-  servico   String
-  tecnico   String?
-  dataHora  DateTime
-  status    AgendamentoStatus @default(AGENDADO)
-  leadId    String?
-  lead      Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id             String            @id @default(uuid())
+  // cliente/tecnico continuam guardando o nome em texto — cache de leitura
+  // rápida (mesmo padrão de Meta.responsavel). Quando clienteId/tecnicoId
+  // vêm preenchidos, o backend resolve o nome a partir do registro real na
+  // criação (ver AgendamentoService.create) — o texto nunca diverge por
+  // digitação manual quando a FK existe.
+  cliente        String
+  clienteId      String?
+  clienteRef     Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  servico        String
+  tecnico        String?
+  tecnicoId      String?
+  tecnicoRef     Tecnico?          @relation(fields: [tecnicoId], references: [id], onDelete: SetNull)
+  dataHora       DateTime
+  status         AgendamentoStatus @default(AGENDADO)
+  leadId         String?
+  lead           Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  // Gerada automaticamente quando dataHora chega (ver AgendamentoSchedulerService)
+  // — nunca criada por um botão manual. status vira CONCLUIDO sozinho quando
+  // esta OS chegar em CONCLUIDO (ver ServicoService.update).
+  ordemServicoId String?           @unique
+  ordemServico   OrdemServico?     @relation(fields: [ordemServicoId], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([status])
   @@index([dataHora])
   @@index([leadId])
+  @@index([clienteId])
+  @@index([tecnicoId])
 }
 
 model Meta {
-  id            String       @id @default(uuid())
-  codigo        String       @unique
-  titulo        String
-  periodo       String
-  indicador     String
-  atual         Float
-  alvo          Float
-  unidade       String
+  id                     String       @id @default(uuid())
+  codigo                 String       @unique
+  titulo                 String
+  periodo                String
+  indicador              String
+  atual                  Float
+  alvo                   Float
+  unidade                String
   // Rótulo de exibição (mantido mesmo com responsavelId setado, pra sobreviver
   // à exclusão do colaborador e cobrir metas de equipe/loja inteira, que não
   // apontam pra uma pessoa). Quando responsavelId existe, o cálculo ao vivo
   // (meta.service.ts) filtra pelos dados daquela pessoa; quando é null, a
   // meta é da loja/equipe inteira — mesmo comportamento de antes.
-  responsavel   String
-  responsavelId String?
+  responsavel            String
+  responsavelId          String?
   responsavelColaborador Colaborador? @relation("MetaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  lowerIsBetter Boolean      @default(false)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  lowerIsBetter          Boolean      @default(false)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
 
   @@index([indicador])
   @@index([periodo])
@@ -396,19 +465,39 @@ enum OrdemServicoPrioridade {
 model OrdemServico {
   id         String                 @id @default(uuid())
   numero     String                 @unique
+  // Mesmo padrão de cache-de-leitura do Agendamento acima: cliente/tecnico
+  // em texto pra exibição rápida, clienteId/tecnicoId como fonte real —
+  // é o que destrava SLA por técnico em Metas (antes impossível de calcular
+  // com tecnico como string solta).
   cliente    String
+  clienteId  String?
+  clienteRef Cliente?               @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   veiculo    String
   tipo       String
   tecnico    String
+  tecnicoId  String?
+  tecnicoRef Tecnico?               @relation(fields: [tecnicoId], references: [id], onDelete: SetNull)
+  // prazo continua String só pra exibição rápida ("22/09/2026, 14:00"),
+  // sempre derivada de prazoData no servidor — nunca mais digitada solta.
+  // prazoData nula = OS antiga de antes desse campo existir; prioridade
+  // não é recalculada automaticamente pra essas (não tem com o que comparar).
   prazo      String
+  prazoData  DateTime?
+  // Calculada a partir de prazoData vs agora (ver ServicoService e
+  // LifecycleJobsService.reavaliarPrioridadeDasOS) — nunca mais um valor
+  // que alguém escolhe manualmente e esquece de atualizar.
   prioridade OrdemServicoPrioridade @default(OK)
   valor      Float
   status     OrdemServicoStatus     @default(PREVISTO)
   createdAt  DateTime               @default(now())
   updatedAt  DateTime               @updatedAt
 
+  agendamentoOrigem Agendamento?
+
   @@index([status])
   @@index([tecnico])
+  @@index([clienteId])
+  @@index([tecnicoId])
 }
 
 enum TecnicoStatus {
@@ -426,6 +515,9 @@ model Tecnico {
   status        TecnicoStatus @default(LIVRE)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+
+  agendamentos  Agendamento[]
+  ordensServico OrdemServico[]
 
   @@index([status])
   @@index([especialidade])

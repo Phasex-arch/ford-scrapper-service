@@ -137,9 +137,11 @@ export class MetaService {
           select: { valor: true },
         });
         // Receita de ordem de serviço não é atribuível a um consultor de
-        // vendas (OrdemServico.tecnico é texto livre, sem relacao real com
-        // Colaborador) — meta de loja inteira soma os dois; meta de pessoa
-        // conta só o que é dela de verdade (financiamento).
+        // vendas: OrdemServico.tecnicoId aponta pro modelo Tecnico (oficina),
+        // não Colaborador (vendas) — são cadastros diferentes no schema, sem
+        // FK entre os dois. Meta.responsavelId só entende Colaborador, então
+        // meta de loja inteira soma os dois; meta de pessoa conta só o que é
+        // dela de verdade (financiamento).
         const ordens = responsavelId
           ? []
           : await this.prisma.ordemServico.findMany({
@@ -163,9 +165,13 @@ export class MetaService {
       }
 
       case 'sla': {
-        // Sem relação real entre OrdemServico e Colaborador (tecnico é texto
-        // livre) — SLA sempre reflete a loja inteira, mesmo com responsável
-        // definido na meta.
+        // OrdemServico.tecnicoId agora referencia um Tecnico real (ver
+        // auditoria, seção 4), mas Meta.responsavelId só aceita Colaborador
+        // — modelos diferentes, sem FK entre eles no schema. SLA por técnico
+        // já é calculável (filtrar por tecnicoId), só não encaixa no mesmo
+        // campo "responsável" que o resto das metas usa; segue refletindo a
+        // loja inteira até Meta ganhar um campo de responsável específico
+        // pra Tecnico.
         const ordens = await this.prisma.ordemServico.findMany({
           where: { ...where, status: 'CONCLUIDO' },
           select: { createdAt: true, updatedAt: true },

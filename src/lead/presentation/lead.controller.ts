@@ -44,15 +44,19 @@ export class LeadController {
   @ApiOperation({ summary: 'Listar leads' })
   @ApiQuery({ name: 'urgencia', required: false, enum: LeadUrgencia })
   @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'convertido', required: false, type: Boolean, description: 'Sem informar, traz todos' })
   @ApiResponse({ status: 200, description: 'Lista paginada de leads' })
   async list(@Query() query: ListLeadsQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    const convertido =
+      query.convertido === undefined ? undefined : query.convertido === 'true' || query.convertido === '1';
     const { data, total } = await this.service.list({
       page,
       limit,
       urgencia: query.urgencia,
       search: query.search,
+      convertido,
     });
     return {
       pagination: buildPaginationMeta(total, page, limit),
@@ -97,5 +101,14 @@ export class LeadController {
   @ApiResponse({ status: 204, description: 'Lead removido' })
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
+  }
+
+  @Post(':uuid/contato')
+  @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({ summary: 'Registrar contato real com o lead (ex.: ligação)' })
+  @ApiParam({ name: 'uuid', description: 'UUID do lead', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Contato registrado' })
+  registrarContato(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    return this.service.registrarContato(uuid);
   }
 }

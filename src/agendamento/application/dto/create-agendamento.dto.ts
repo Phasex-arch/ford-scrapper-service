@@ -9,11 +9,20 @@ import {
 } from 'class-validator';
 
 export class CreateAgendamentoDto {
-  @ApiProperty({ example: 'Carlos Mendes' })
+  @ApiPropertyOptional({
+    example: 'Carlos Mendes',
+    description: 'Obrigatório só quando clienteId não é informado (cliente avulso, sem cadastro)',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(120)
-  cliente!: string;
+  cliente?: string;
+
+  @ApiPropertyOptional({ description: 'UUID de um Cliente real — quando informado, o nome de exibição vem do cadastro' })
+  @IsOptional()
+  @IsUUID()
+  clienteId?: string;
 
   @ApiProperty({ example: 'Revisão 10.000 km' })
   @IsString()
@@ -26,6 +35,11 @@ export class CreateAgendamentoDto {
   @IsString()
   @MaxLength(120)
   tecnico?: string;
+
+  @ApiPropertyOptional({ description: 'UUID de um Tecnico real — quando informado, o nome de exibição vem do cadastro' })
+  @IsOptional()
+  @IsUUID()
+  tecnicoId?: string;
 
   @ApiProperty({ example: '2026-09-15T10:30:00.000Z' })
   @IsDateString()

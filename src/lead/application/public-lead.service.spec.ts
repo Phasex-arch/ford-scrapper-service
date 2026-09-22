@@ -45,7 +45,9 @@ describe('PublicLeadService', () => {
     expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         clienteNome: 'Maria Silva',
-        urgencia: LeadUrgencia.MEDIA,
+        // Sem valorEstimado informado (0) → urgência mais baixa, derivada
+        // automaticamente — não é mais MEDIA fixo pra todo lead que entra.
+        urgencia: LeadUrgencia.BAIXA,
         necessidade: 'Quero uma proposta',
       }),
     );
@@ -60,6 +62,21 @@ describe('PublicLeadService', () => {
     const body = JSON.parse(init.body as string);
     expect(body.to).toEqual([{ email: 'maria@example.com', name: 'Maria Silva' }]);
     expect(body.sender).toEqual({ email: 'concessionaria@gmail.com', name: 'Ford One' });
+  });
+
+  it('deriva urgência mais alta pra leads de valor estimado alto, mesmo sem o form pedir isso ao visitante', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: jest.fn().mockResolvedValue({ messageId: 'email-id' }),
+    });
+    const { service, repository } = setup(fetchMock);
+
+    await service.create({ ...dto, valorEstimado: 350_000 });
+
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ urgencia: LeadUrgencia.URGENTE }),
+    );
   });
 
   it('retorna erro explícito quando o envio via Brevo falha', async () => {

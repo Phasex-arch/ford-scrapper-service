@@ -114,33 +114,48 @@ interface ColaboradorSeed {
   senha: string;
 }
 
-const COLABORADORES_SEED: ColaboradorSeed[] = [
-  {
-    nome: 'Ricardo Costa',
-    cpf: '12345678901',
-    telefone: '(11) 98765-4321',
-    email: 'ricardo.costa@ford.com.br',
-    endereco: 'Rua Bronco Sport, 42 - Sao Paulo/SP',
-    registro: 'FRD-GER-001',
-    cargo: 'Gerente Comercial',
-    role: 'GERENTE',
-    senha: 'GerenteFord@2026',
-  },
-  {
-    nome: 'Patricia Oliveira',
-    cpf: '98765432100',
-    telefone: '(11) 91234-5678',
-    email: 'patricia.oliveira@ford.com.br',
-    endereco: 'Rua Maverick, 7 - Sao Paulo/SP',
-    registro: 'FRD-FUN-001',
-    cargo: 'Consultora de Vendas',
-    role: 'FUNCIONARIO',
-    senha: 'FuncFord@2026',
-  },
-];
+// Senhas vêm do ambiente (nunca hardcoded) — mesmo padrão de ADMIN_SENHA.
+// Evita que uma senha real de produção fique commitada no código-fonte.
+function requiredSenha(envVar: string): string {
+  const senha = process.env[envVar];
+  if (!senha) {
+    throw new Error(
+      `${envVar} não definido no ambiente. Defina antes de rodar \`prisma:seed\`.`,
+    );
+  }
+  return senha;
+}
+
+function buildColaboradoresSeed(): ColaboradorSeed[] {
+  return [
+    {
+      nome: 'Ricardo Costa',
+      cpf: '12345678901',
+      telefone: '(11) 98765-4321',
+      email: 'ricardo.costa@ford.com.br',
+      endereco: 'Rua Bronco Sport, 42 - Sao Paulo/SP',
+      registro: 'FRD-GER-001',
+      cargo: 'Gerente Comercial',
+      role: 'GERENTE',
+      senha: requiredSenha('GERENTE_SENHA'),
+    },
+    {
+      nome: 'Patricia Oliveira',
+      cpf: '98765432100',
+      telefone: '(11) 91234-5678',
+      email: 'patricia.oliveira@ford.com.br',
+      endereco: 'Rua Maverick, 7 - Sao Paulo/SP',
+      registro: 'FRD-FUN-001',
+      cargo: 'Consultora de Vendas',
+      role: 'FUNCIONARIO',
+      senha: requiredSenha('FUNCIONARIO_SENHA'),
+    },
+  ];
+}
 
 async function seedColaboradores(): Promise<void> {
-  for (const c of COLABORADORES_SEED) {
+  const colaboradores = buildColaboradoresSeed();
+  for (const c of colaboradores) {
     const senhaHash = await hashSenha(c.senha);
     await prisma.colaborador.upsert({
       where: { email: c.email },
@@ -159,7 +174,7 @@ async function seedColaboradores(): Promise<void> {
       },
     });
   }
-  log('AUTH', `${COLABORADORES_SEED.length} colaboradores de exemplo`);
+  log('AUTH', `${colaboradores.length} colaboradores de exemplo`);
 }
 
 // ---------------------------------------------------------------------------

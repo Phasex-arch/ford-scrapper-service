@@ -27,19 +27,25 @@ export class VeiculoClienteService {
     const existing = await this.repo.findByCodigo(dto.codigo);
     if (existing) throw new ConflictException('Codigo ja cadastrado');
     const created = await this.repo.create(clienteId, dto);
-    await this.repo.incrementVeiculosCount(clienteId, 1);
+    await this.repo.ajustarAgregadosCliente(clienteId, 1, dto.precoAquisicao);
     return created;
   }
 
+  /** Se precoAquisicao mudar, o LTV do cliente acompanha a diferença — não
+   * fica preso ao valor original da compra registrada. */
   async update(id: string, dto: UpdateVeiculoClienteDto) {
-    await this.findById(id);
-    return this.repo.update(id, dto);
+    const atual = await this.findById(id);
+    const atualizado = await this.repo.update(id, dto);
+    if (dto.precoAquisicao !== undefined && dto.precoAquisicao !== atual.precoAquisicao) {
+      await this.repo.ajustarAgregadosCliente(atual.clienteId, 0, dto.precoAquisicao - atual.precoAquisicao);
+    }
+    return atualizado;
   }
 
   async delete(id: string) {
     const item = await this.findById(id);
     await this.repo.delete(id);
-    await this.repo.incrementVeiculosCount(item.clienteId, -1);
+    await this.repo.ajustarAgregadosCliente(item.clienteId, -1, -item.precoAquisicao);
     return item;
   }
 }

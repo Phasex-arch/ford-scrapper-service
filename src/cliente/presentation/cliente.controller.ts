@@ -100,4 +100,13 @@ export class ClienteController {
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
   }
+
+  @Get(':uuid/historico')
+  @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({ summary: 'Histórico de cadastros duplicados mesclados neste cliente' })
+  @ApiParam({ name: 'uuid', description: 'UUID do cliente', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Lista de eventos de mesclagem' })
+  getHistorico(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    return this.service.getHistoricoMesclagem(uuid);
+  }
 }

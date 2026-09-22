@@ -9,6 +9,7 @@ export interface LeadListFilter {
   limit: number;
   urgencia?: LeadUrgencia;
   search?: string;
+  convertido?: boolean;
 }
 
 @Injectable()
@@ -52,6 +53,7 @@ export class LeadRepository {
   private buildWhere(filter: LeadListFilter) {
     const where: Record<string, unknown> = {};
     if (filter.urgencia) where.urgencia = filter.urgencia;
+    if (filter.convertido !== undefined) where.convertido = filter.convertido;
     if (filter.search && filter.search.trim()) {
       const q = filter.search.trim();
       where.OR = [

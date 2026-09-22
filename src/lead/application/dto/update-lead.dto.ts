@@ -25,11 +25,16 @@ export class UpdateLeadDto {
   @MaxLength(4)
   iniciais?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Texto livre — obrigatório só quando estoqueVeiculoId não é informado' })
   @IsOptional()
   @IsString()
   @MaxLength(120)
   veiculoInteresse?: string;
+
+  @ApiPropertyOptional({ description: 'UUID de um item real do estoque — quando informado, o texto de exibição vem do cadastro' })
+  @IsOptional()
+  @IsUUID()
+  estoqueVeiculoId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -34,6 +34,7 @@ import { EstoqueService } from '../application/estoque.service.js';
 import { CreateEstoqueDto } from '../application/dto/create-estoque.dto.js';
 import { UpdateEstoqueDto } from '../application/dto/update-estoque.dto.js';
 import { ListEstoqueQueryDto } from '../application/dto/list-estoque-query.dto.js';
+import { ReservarEstoqueDto } from '../application/dto/reservar-estoque.dto.js';
 
 @ApiTags('Estoque')
 @ApiBearerAuth()
@@ -111,5 +112,29 @@ export class EstoqueController {
   @ApiResponse({ status: 204, description: 'Item de estoque removido' })
   remove(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
     return this.service.delete(uuid);
+  }
+
+  @Post(':uuid/reservar')
+  @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({
+    summary: 'Reservar unidade pra um cliente real (expira sozinha em 48h)',
+  })
+  @ApiParam({ name: 'uuid', description: 'UUID do item de estoque', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Unidade reservada' })
+  @ApiResponse({ status: 409, description: 'Ja reservada por outro cliente' })
+  reservar(
+    @Param('uuid', new ParseUUIDPipe()) uuid: string,
+    @Body() dto: ReservarEstoqueDto,
+  ) {
+    return this.service.reservar(uuid, dto.clienteId);
+  }
+
+  @Post(':uuid/liberar-reserva')
+  @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiOperation({ summary: 'Cancelar reserva em andamento antes do prazo expirar' })
+  @ApiParam({ name: 'uuid', description: 'UUID do item de estoque', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Reserva cancelada' })
+  liberarReserva(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+    return this.service.liberarReserva(uuid);
   }
 }

@@ -48,10 +48,19 @@ export class VeiculoClienteRepository {
     return this.prisma.veiculoCliente.delete({ where: { id } });
   }
 
-  incrementVeiculosCount(clienteId: string, delta: number) {
+  /**
+   * veiculosCount e ltv só mudam por aqui — nunca por edição manual (ver
+   * auditoria, seção 3: antes eram campos soltos, editáveis via DTO,
+   * dessincronizados da posse/compra real). ltvDelta em reais, positivo ao
+   * criar um VeiculoCliente, negativo ao remover.
+   */
+  ajustarAgregadosCliente(clienteId: string, veiculosCountDelta: number, ltvDelta: number) {
     return this.prisma.cliente.update({
       where: { id: clienteId },
-      data: { veiculosCount: { increment: delta } },
+      data: {
+        veiculosCount: { increment: veiculosCountDelta },
+        ltv: { increment: ltvDelta },
+      },
     });
   }
 }

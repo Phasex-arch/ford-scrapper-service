@@ -14,6 +14,20 @@ interface BrevoErrorResponse {
   message?: string;
 }
 
+/**
+ * Urgência inicial derivada do valor estimado — nunca mais um MEDIA fixo
+ * pra todo lead (ver auditoria, seção 0). O formulário público não pede
+ * urgência ao visitante; um CRM de vendas real infere isso do potencial de
+ * receita, não de digitação manual. Faixas em R$, ajustáveis conforme o
+ * ticket médio real da concessionária.
+ */
+function derivarUrgenciaInicial(valorEstimado: number): LeadUrgencia {
+  if (valorEstimado >= 300_000) return LeadUrgencia.URGENTE;
+  if (valorEstimado >= 150_000) return LeadUrgencia.ALTA;
+  if (valorEstimado >= 50_000) return LeadUrgencia.MEDIA;
+  return LeadUrgencia.BAIXA;
+}
+
 @Injectable()
 export class PublicLeadService {
   private readonly logger = new Logger(PublicLeadService.name);
@@ -38,7 +52,7 @@ export class PublicLeadService {
       iniciais: this.initials(dto.nome),
       veiculoInteresse: dto.veiculoInteresse,
       necessidade: dto.mensagem,
-      urgencia: dto.urgencia ?? LeadUrgencia.MEDIA,
+      urgencia: dto.urgencia ?? derivarUrgenciaInicial(dto.valorEstimado ?? 0),
       valorEstimado: dto.valorEstimado ?? 0,
       telefone: dto.telefone,
       email: dto.email,

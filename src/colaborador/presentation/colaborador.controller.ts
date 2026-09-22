@@ -22,6 +22,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '../../../generated/prisma/enums.js';
+import { CurrentUser } from '../../auth/infrastructure/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { AuditInterceptor } from '../../common/interceptors/audit.interceptor.js';
@@ -116,8 +117,9 @@ export class ColaboradorController {
   async update(
     @Param('uuid', new ParseUUIDPipe()) uuid: string,
     @Body() dto: UpdateColaboradorDto,
+    @CurrentUser('role') requesterRole: Role,
   ) {
-    const c = await this.service.update(uuid, dto);
+    const c = await this.service.update(uuid, dto, requesterRole);
     return toColaboradorResponse(c);
   }
 

@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service.js';
 import {
   FinanciamentoListFilter,
   FinanciamentoRepository,
@@ -10,9 +11,20 @@ import {
 import type { CreateFinanciamentoDto } from './dto/create-financiamento.dto.js';
 import type { UpdateFinanciamentoDto } from './dto/update-financiamento.dto.js';
 
+function gerarCodigoCliente(): string {
+  return `C-${Date.now().toString(36).toUpperCase()}`;
+}
+
+function gerarCodigoVeiculoCliente(): string {
+  return `VC-${Date.now().toString(36).toUpperCase()}`;
+}
+
 @Injectable()
 export class FinanciamentoService {
-  constructor(private readonly repo: FinanciamentoRepository) {}
+  constructor(
+    private readonly repo: FinanciamentoRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async list(opts: FinanciamentoListFilter) {
     const [data, total] = await Promise.all([
@@ -34,13 +46,146 @@ export class FinanciamentoService {
     return this.repo.create(dto);
   }
 
+  /**
+   * update() genérico continua existindo pra edição de campos comuns
+   * (valor, entrada, prazo...). Uma mudança de `status` pra APROVADO passa
+   * pelo fluxo automático abaixo — nunca só grava a coluna.
+   */
   async update(id: string, dto: UpdateFinanciamentoDto) {
-    await this.findById(id);
+    const atual = await this.findById(id);
+    if (dto.status === 'APROVADO' && atual.status !== 'APROVADO') {
+      return this.aprovar(id);
+    }
     return this.repo.update(id, dto);
   }
 
   async delete(id: string) {
     await this.findById(id);
     return this.repo.delete(id);
+  }
+
+  /**
+   * Regra automática de CRM/DMS disparada pela aprovação — nunca por um
+   * clique manual separado (ver seção 0 da auditoria):
+   *   1. Financiamento vinculado a um Lead → resolve/cria o Cliente real
+   *      (por email ou telefone, evitando duplicata) e marca o Lead como
+   *      convertido.
+   *   2. Financiamento vinculado a um item real de estoque
+   *      (estoqueVeiculoId) → gera o VeiculoCliente (posse) e decrementa
+   *      EstoqueVeiculo.quantidade, virando "Vendido" ao chegar a zero.
+   * Sem leadId (financiamento avulso, sem lead de origem) só o status muda —
+   * não há como resolver um Cliente real com segurança a partir de um nome
+   * digitado à mão.
+   */
+  private async aprovar(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const financiamento = await tx.financiamento.findUniqueOrThrow({ where: { id } });
+      const atualizado = await tx.financiamento.update({
+        where: { id },
+        data: { status: 'APROVADO' },
+      });
+
+      if (!financiamento.leadId) return atualizado;
+
+      const lead = await tx.lead.findUnique({ where: { id: financiamento.leadId } });
+      if (!lead) return atualizado;
+
+      let clienteId = lead.clienteId;
+      if (!clienteId) {
+        let cliente = lead.email
+          ? await tx.cliente.findFirst({ where: { email: lead.email } })
+          : null;
+        if (!cliente) {
+          cliente = await tx.cliente.findFirst({ where: { telefone: lead.telefone } });
+        }
+        if (!cliente) {
+          cliente = await tx.cliente.create({
+            data: {
+              codigo: gerarCodigoCliente(),
+              nome: lead.clienteNome,
+              telefone: lead.telefone,
+              email: lead.email ?? '',
+              iniciais: lead.iniciais,
+              segmento: 'Padrao',
+              status: 'ATIVO',
+              ultimaVisita: new Date(),
+            },
+          });
+        } else if (cliente.nome !== lead.clienteNome || cliente.telefone !== lead.telefone) {
+          // Achado por e-mail/telefone já batendo com um cliente existente
+          // (cadastro duplicado — a mesma pessoa entrou em contato de novo).
+          // O contato mais recente é o dado mais confiável, mas o cadastro
+          // antigo não pode só desaparecer: fica registrado no histórico do
+          // cliente antes de ser sobrescrito.
+          await tx.auditLog.create({
+            data: {
+              action: 'cliente_merge_duplicado',
+              resource: 'Cliente',
+              resourceId: cliente.id,
+              details: {
+                nomeAntigo: cliente.nome,
+                telefoneAntigo: cliente.telefone,
+                nomeNovo: lead.clienteNome,
+                telefoneNovo: lead.telefone,
+                leadDuplicadoId: lead.id,
+                leadDuplicadoCodigo: lead.codigo,
+              },
+            },
+          });
+          cliente = await tx.cliente.update({
+            where: { id: cliente.id },
+            data: { nome: lead.clienteNome, telefone: lead.telefone, iniciais: lead.iniciais },
+          });
+        }
+        clienteId = cliente.id;
+        await tx.lead.update({
+          where: { id: lead.id },
+          data: { convertido: true, clienteId },
+        });
+      }
+
+      if (financiamento.estoqueVeiculoId) {
+        const estoque = await tx.estoqueVeiculo.findUnique({
+          where: { id: financiamento.estoqueVeiculoId },
+        });
+        if (estoque && estoque.quantidade > 0) {
+          await tx.veiculoCliente.create({
+            data: {
+              codigo: gerarCodigoVeiculoCliente(),
+              clienteId,
+              estoqueVeiculoId: estoque.id,
+              modelo: estoque.modelo,
+              versao: estoque.versao,
+              ano: estoque.ano,
+              cor: estoque.cor,
+              km: estoque.km,
+              imagem: estoque.imagem,
+              precoAquisicao: financiamento.valor,
+              dataAquisicao: new Date(),
+              status: 'ATIVO',
+            },
+          });
+          const novaQuantidade = estoque.quantidade - 1;
+          await tx.estoqueVeiculo.update({
+            where: { id: estoque.id },
+            data: {
+              quantidade: novaQuantidade,
+              status: novaQuantidade === 0 ? 'Vendido' : estoque.status,
+            },
+          });
+          await tx.cliente.update({
+            where: { id: clienteId },
+            data: {
+              veiculosCount: { increment: 1 },
+              ltv: { increment: financiamento.valor },
+              status: 'ATIVO',
+              ultimaVisita: new Date(),
+            },
+          });
+        }
+      }
+
+      return atualizado;
+    });
   }
 }

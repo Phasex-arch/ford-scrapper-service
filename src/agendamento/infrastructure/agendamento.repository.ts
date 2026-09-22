@@ -4,6 +4,10 @@ import type { AgendamentoStatus } from '../../../generated/prisma/enums.js';
 import type { CreateAgendamentoDto } from '../application/dto/create-agendamento.dto.js';
 import type { UpdateAgendamentoDto } from '../application/dto/update-agendamento.dto.js';
 
+/** O service já resolveu `cliente` (obrigatório na tabela) a partir de
+ * clienteId antes de chegar aqui — nunca mais opcional neste ponto. */
+export type AgendamentoCreateData = Omit<CreateAgendamentoDto, 'cliente'> & { cliente: string };
+
 export interface AgendamentoListFilter {
   page: number;
   limit: number;
@@ -35,7 +39,7 @@ export class AgendamentoRepository {
     return this.prisma.agendamento.findUnique({ where: { id } });
   }
 
-  create(dto: CreateAgendamentoDto) {
+  create(dto: AgendamentoCreateData) {
     return this.prisma.agendamento.create({
       data: { ...dto, dataHora: new Date(dto.dataHora) },
     });

@@ -1,7 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination.dto.js';
+import { AvaliacaoStatus } from '../../../../generated/prisma/enums.js';
 
 /**
  * Ver o comentário em cliente/application/dto/list-clientes-query.dto.ts: os
@@ -24,4 +25,9 @@ export class ListAvaliacoesQueryDto extends PaginationQueryDto {
   @Min(1)
   @Max(5)
   notaMax?: number;
+
+  @ApiPropertyOptional({ enum: AvaliacaoStatus, description: 'Só usado em /avaliacoes/todas (staff)' })
+  @IsOptional()
+  @IsEnum(AvaliacaoStatus)
+  status?: AvaliacaoStatus;
 }

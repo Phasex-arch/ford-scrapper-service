@@ -18,6 +18,11 @@ export class UpdateAgendamentoDto {
   @MaxLength(120)
   cliente?: string;
 
+  @ApiPropertyOptional({ description: 'UUID de um Cliente real — quando informado, o nome de exibição vem do cadastro' })
+  @IsOptional()
+  @IsUUID()
+  clienteId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -30,6 +35,11 @@ export class UpdateAgendamentoDto {
   @IsString()
   @MaxLength(120)
   tecnico?: string;
+
+  @ApiPropertyOptional({ description: 'UUID de um Tecnico real — quando informado, o nome de exibição vem do cadastro' })
+  @IsOptional()
+  @IsUUID()
+  tecnicoId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

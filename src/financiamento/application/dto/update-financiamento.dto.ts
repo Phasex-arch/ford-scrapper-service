@@ -83,4 +83,12 @@ export class UpdateFinanciamentoDto {
   @IsOptional()
   @IsUUID()
   leadId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'UUID do item real de estoque — quando setado, aprovar o financiamento gera o VeiculoCliente e decrementa o estoque automaticamente',
+  })
+  @IsOptional()
+  @IsUUID()
+  estoqueVeiculoId?: string;
 }

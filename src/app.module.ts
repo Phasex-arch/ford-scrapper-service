@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 
@@ -29,6 +30,7 @@ import { TecnicoModule } from './tecnico/tecnico.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { VeiculoClienteModule } from './veiculo-cliente/veiculo-cliente.module.js';
 import { AuditLogModule } from './audit-log/audit-log.module.js';
+import { SchedulerModule } from './scheduler/scheduler.module.js';
 
 @Module({
   imports: [
@@ -62,6 +64,9 @@ import { AuditLogModule } from './audit-log/audit-log.module.js';
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60_000, limit: 60 }],
     }),
+    // Motor dos jobs automáticos da auditoria (seção 0): Agendamento→OS,
+    // reavaliação de urgência de Lead, decaimento de Cliente.status.
+    ScheduleModule.forRoot(),
 
     CommonModule,
     AuthModule,
@@ -85,6 +90,7 @@ import { AuditLogModule } from './audit-log/audit-log.module.js';
     VehicleModule,
     HealthModule,
     SyncModule,
+    SchedulerModule,
   ],
   controllers: [],
   providers: [

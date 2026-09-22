@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -9,8 +10,17 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { AvaliacaoStatus } from '../../../../generated/prisma/enums.js';
 
 export class UpdateAvaliacaoDto {
+  @ApiPropertyOptional({
+    enum: AvaliacaoStatus,
+    description: 'Moderação: aprova ou rejeita a avaliação pra ela (não) aparecer publicamente',
+  })
+  @IsOptional()
+  @IsEnum(AvaliacaoStatus)
+  status?: AvaliacaoStatus;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

@@ -1,11 +1,12 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import argon2 from 'argon2';
 import { ColaboradorRepository } from '../infrastructure/repositories/colaborador.repository.js';
-import type { Role } from '../../../generated/prisma/enums.js';
+import { Role } from '../../../generated/prisma/enums.js';
 import type { CreateColaboradorDto } from './dto/create-colaborador.dto.js';
 import type { UpdateColaboradorDto } from './dto/update-colaborador.dto.js';
 
@@ -71,11 +72,18 @@ export class ColaboradorService {
     });
   }
 
-  async update(id: string, dto: UpdateColaboradorDto) {
+  async update(id: string, dto: UpdateColaboradorDto, requesterRole?: Role) {
     await this.findById(id);
 
-    if (dto.email) {
-      const existing = await this.repo.findByEmail(dto.email);
+    if (dto.role !== undefined && requesterRole !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'Somente ADMIN pode alterar a role de um colaborador',
+      );
+    }
+
+    const email = dto.email ? dto.email.toLowerCase() : undefined;
+    if (email) {
+      const existing = await this.repo.findByEmail(email);
       if (existing && existing.id !== id) {
         throw new ConflictException('Email ja cadastrado');
       }
@@ -84,7 +92,7 @@ export class ColaboradorService {
     const data: Parameters<ColaboradorRepository['update']>[1] = {};
     if (dto.nome !== undefined) data.nome = dto.nome.trim();
     if (dto.telefone !== undefined) data.telefone = dto.telefone.trim();
-    if (dto.email !== undefined) data.email = dto.email;
+    if (email !== undefined) data.email = email;
     if (dto.endereco !== undefined) data.endereco = dto.endereco.trim();
     if (dto.cargo !== undefined) data.cargo = dto.cargo.trim();
     if (dto.role !== undefined) data.role = dto.role;

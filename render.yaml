@@ -43,6 +43,10 @@ services:
         sync: false
       - key: ADMIN_SENHA # openssl rand -base64 18
         sync: false
+      - key: GERENTE_SENHA # openssl rand -base64 18 — seed exige, nunca hardcoded
+        sync: false
+      - key: FUNCIONARIO_SENHA # openssl rand -base64 18 — seed exige, nunca hardcoded
+        sync: false
       - key: BREVO_API_KEY # app.brevo.com/settings/keys/api
         sync: false
       - key: BREVO_SENDER_EMAIL # precisa estar verificado em app.brevo.com/senders

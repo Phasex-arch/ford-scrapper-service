@@ -19,4 +19,9 @@ export class ListLeadsQueryDto extends PaginationQueryDto {
   @IsString()
   @MaxLength(120)
   search?: string;
+
+  @ApiPropertyOptional({ description: '"true"/"false" — sem informar, traz todos' })
+  @IsOptional()
+  @IsString()
+  convertido?: string;
 }

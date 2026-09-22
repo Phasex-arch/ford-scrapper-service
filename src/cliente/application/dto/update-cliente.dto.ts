@@ -1,16 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsEmail,
   IsEnum,
-  IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
-  Min,
   MinLength,
 } from 'class-validator';
 import { ClienteStatus } from '../../../../generated/prisma/enums.js';
@@ -46,20 +42,6 @@ export class UpdateClienteDto {
   @IsOptional()
   @IsEnum(ClienteStatus)
   status?: ClienteStatus;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  veiculosCount?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  ltv?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service.js';
 import { ClienteRepository } from '../infrastructure/cliente.repository.js';
 import type { ClienteStatus } from '../../../generated/prisma/enums.js';
 import type { CreateClienteDto } from './dto/create-cliente.dto.js';
@@ -18,7 +19,10 @@ interface ListOptions {
 
 @Injectable()
 export class ClienteService {
-  constructor(private readonly repo: ClienteRepository) {}
+  constructor(
+    private readonly repo: ClienteRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async list(opts: ListOptions) {
     const [data, total] = await Promise.all([
@@ -48,5 +52,20 @@ export class ClienteService {
   async delete(id: string) {
     await this.findById(id);
     return this.repo.delete(id);
+  }
+
+  /**
+   * Histórico de cadastro duplicado mesclado (ver FinanciamentoService.
+   * aprovar) — quando um lead com e-mail/telefone já cadastrado é
+   * convertido, o nome/telefone antigos ficam registrados aqui antes de
+   * serem atualizados com o contato mais recente, pra não sumir sem
+   * explicação.
+   */
+  async getHistoricoMesclagem(id: string) {
+    await this.findById(id);
+    return this.prisma.auditLog.findMany({
+      where: { resource: 'Cliente', resourceId: id, action: 'cliente_merge_duplicado' },
+      orderBy: { timestamp: 'desc' },
+    });
   }
 }

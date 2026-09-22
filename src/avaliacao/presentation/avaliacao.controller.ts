@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Role } from '../../../generated/prisma/enums.js';
 import { Public } from '../../auth/infrastructure/decorators/public.decorator.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
@@ -61,24 +62,52 @@ export class AvaliacaoController {
 
   @Public()
   @Get('stats')
-  @ApiOperation({ summary: 'Estatísticas públicas das avaliações' })
+  @ApiOperation({ summary: 'Estatísticas públicas das avaliações (só aprovadas)' })
   stats() {
     return this.service.stats();
   }
 
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
+  @ApiBearerAuth()
+  @Get('todas')
+  @ApiOperation({ summary: 'Listar todas as avaliações pra moderação, qualquer status (staff)' })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiResponse({ status: 200, description: 'Lista paginada de avaliações (todos os status)' })
+  async listTodas(@Query() query: ListAvaliacoesQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const { data, total } = await this.service.listTodas({
+      page,
+      limit,
+      notaMin: query.notaMin,
+      notaMax: query.notaMax,
+      status: query.status,
+    });
+    return {
+      pagination: buildPaginationMeta(total, page, limit),
+      data,
+    };
+  }
+
   @Public()
   @Get(':uuid')
-  @ApiOperation({ summary: 'Buscar avaliação por UUID (público)' })
+  @ApiOperation({ summary: 'Buscar avaliação por UUID (público, só aprovadas)' })
   @ApiParam({ name: 'uuid', description: 'UUID da avaliação', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Avaliação encontrada' })
   findOne(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
-    return this.service.findById(uuid);
+    return this.service.findByIdPublic(uuid);
   }
 
   @Public()
   @Post()
-  @ApiOperation({ summary: 'Criar avaliação (público)' })
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Criar avaliação (público)',
+    description: 'Limitado a 3 requisições por minuto por origem.',
+  })
   @ApiResponse({ status: 201, description: 'Avaliação criada' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido' })
   create(@Body() dto: CreateAvaliacaoDto) {
     return this.service.create(dto);
   }

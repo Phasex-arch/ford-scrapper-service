@@ -7,6 +7,26 @@ import type {
 import type { CreateServicoDto } from '../application/dto/create-servico.dto.js';
 import type { UpdateServicoDto } from '../application/dto/update-servico.dto.js';
 
+/** O service já resolveu numero/cliente/tecnico (obrigatórios na tabela) e
+ * derivou prazo/prioridade de prazoData (Date real) antes de chegar aqui —
+ * nunca mais opcionais/texto-livre/soltos neste ponto. */
+export type ServicoCreateData = Omit<CreateServicoDto, 'numero' | 'cliente' | 'tecnico' | 'prazoData'> & {
+  numero: string;
+  cliente: string;
+  tecnico: string;
+  prazoData: Date;
+  prazo: string;
+  prioridade: OrdemServicoPrioridade;
+};
+
+/** Mesma ideia do create, mas parcial — só os campos que o service decidiu
+ * atualizar nesta chamada. */
+export type ServicoUpdateData = Omit<UpdateServicoDto, 'prazoData'> & {
+  prazoData?: Date;
+  prazo?: string;
+  prioridade?: OrdemServicoPrioridade;
+};
+
 export interface ServicoListFilter {
   page: number;
   limit: number;
@@ -42,11 +62,11 @@ export class ServicoRepository {
     return this.prisma.ordemServico.findUnique({ where: { numero } });
   }
 
-  create(dto: CreateServicoDto) {
+  create(dto: ServicoCreateData) {
     return this.prisma.ordemServico.create({ data: dto });
   }
 
-  update(id: string, dto: UpdateServicoDto) {
+  update(id: string, dto: ServicoUpdateData) {
     return this.prisma.ordemServico.update({ where: { id }, data: dto });
   }
 

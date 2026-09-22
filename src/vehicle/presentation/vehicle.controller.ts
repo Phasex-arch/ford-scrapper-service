@@ -6,14 +6,19 @@ import {
   NotFoundException,
   Param,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Role } from '../../../generated/prisma/enums.js';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
+import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { VehicleService } from '../application/vehicle/vehicle.service.js';
 import {
   mapVehicleToResponse,
@@ -26,8 +31,15 @@ const SLUG_RE = /^[a-z0-9-]{1,80}$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Catálogo Ford consumido só pelo painel autenticado (Estoque → AddEstoqueModal),
+ * nunca pelo portal público — por isso ADMIN/GERENTE/FUNCIONARIO, não @Public().
+ */
 @ApiTags('Veículos')
+@ApiBearerAuth()
 @Controller('vehicles')
+@UseGuards(RolesGuard)
+@Roles(Role.ADMIN, Role.GERENTE, Role.FUNCIONARIO)
 export class VehicleController {
   private readonly logger = new Logger(VehicleController.name);
 

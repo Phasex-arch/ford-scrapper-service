@@ -1,29 +1,35 @@
-import { Controller, Get, Logger } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Logger, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { Role } from '../../../generated/prisma/enums.js';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
+import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { ScrapperService } from '../application/scrapper.js';
 import type { FordCatalogResponse } from '../domain/scrapped-info.js';
 
 /**
  * Endpoints administrativos do scraper.
- * Toda rota fica protegida pelo `JwtAuthGuard` global; clientes precisam
- * apresentar `Authorization: Bearer <token>` para disparar uma coleta.
- *
- * Para persistir o catálogo coletado no banco, use `POST /api/sync`
- * (módulo `vehicle/sync`) — ele cria um `SyncRun` com histórico e devolve
- * um resumo da execução. Esta rota apenas coleta e retorna, sem gravar nada.
+ * Restrito a ADMIN/GERENTE — dispara scraping ao vivo (custo de IA, risco
+ * de bloqueio de IP pela Ford), não é algo que qualquer FUNCIONARIO deveria
+ * poder acionar. Throttle evita disparos repetidos acidentais/abusivos.
  */
 @ApiTags('Coleta de dados')
 @ApiBearerAuth('JWT')
 @Controller('scrapper')
+@UseGuards(RolesGuard)
 export class ScrapperController {
   private readonly logger = new Logger(ScrapperController.name);
 
   constructor(private readonly scrapperService: ScrapperService) {}
 
   @Get('ford')
+  @Roles(Role.ADMIN, Role.GERENTE)
+  @Throttle({ default: { limit: 1, ttl: 300_000 } })
   @ApiOperation({
     summary: 'Dispara o scraping da Ford e devolve o catálogo coletado',
+    description: 'Restrito a ADMIN/GERENTE. Limitado a 1 requisição a cada 5 minutos.',
   })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido' })
   async scrapeFord(): Promise<FordCatalogResponse> {
     this.logger.log('Ford scraping triggered via GET /scrapper/ford');
     const start = Date.now();

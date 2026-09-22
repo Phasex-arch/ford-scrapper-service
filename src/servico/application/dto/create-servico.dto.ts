@@ -2,29 +2,41 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
+  IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
-import {
-  OrdemServicoPrioridade,
-  OrdemServicoStatus,
-} from '../../../../generated/prisma/enums.js';
+import { OrdemServicoStatus } from '../../../../generated/prisma/enums.js';
 
 export class CreateServicoDto {
-  @ApiProperty({ example: '#4831' })
+  @ApiPropertyOptional({
+    example: '#4831',
+    description: 'Gerado pelo servidor se omitido — nunca confie em número gerado no cliente',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(20)
-  numero!: string;
+  numero?: string;
 
-  @ApiProperty({ example: 'Carlos Mendes' })
+  @ApiPropertyOptional({
+    example: 'Carlos Mendes',
+    description: 'Obrigatório só quando clienteId não é informado',
+  })
+  @IsOptional()
   @IsString()
   @MaxLength(120)
-  cliente!: string;
+  cliente?: string;
+
+  @ApiPropertyOptional({ description: 'UUID de um Cliente real — quando informado, o nome de exibição vem do cadastro' })
+  @IsOptional()
+  @IsUUID()
+  clienteId?: string;
 
   @ApiProperty({ example: 'Bronco Sport 2024' })
   @IsString()
@@ -36,23 +48,26 @@ export class CreateServicoDto {
   @MaxLength(200)
   tipo!: string;
 
-  @ApiProperty({ example: 'Andre Souza' })
-  @IsString()
-  @MaxLength(120)
-  tecnico!: string;
-
-  @ApiProperty({ example: 'Hoje, 14:00' })
-  @IsString()
-  @MaxLength(40)
-  prazo!: string;
-
   @ApiPropertyOptional({
-    enum: OrdemServicoPrioridade,
-    default: OrdemServicoPrioridade.OK,
+    example: 'Andre Souza',
+    description: 'Obrigatório só quando tecnicoId não é informado',
   })
   @IsOptional()
-  @IsEnum(OrdemServicoPrioridade)
-  prioridade?: OrdemServicoPrioridade;
+  @IsString()
+  @MaxLength(120)
+  tecnico?: string;
+
+  @ApiPropertyOptional({ description: 'UUID de um Tecnico real — quando informado, o nome de exibição vem do cadastro' })
+  @IsOptional()
+  @IsUUID()
+  tecnicoId?: string;
+
+  @ApiProperty({
+    example: '2026-09-25T14:00:00.000Z',
+    description: 'Data/hora real do prazo (ISO 8601, UTC) — prazo (texto) e prioridade são calculados pelo servidor a partir daqui, nunca informados pelo cliente',
+  })
+  @IsISO8601()
+  prazoData!: string;
 
   @ApiProperty({ example: 1840 })
   @Type(() => Number)
