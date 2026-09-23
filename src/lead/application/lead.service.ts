@@ -69,6 +69,7 @@ export class LeadService {
     return this.prisma.lead.update({
       where: { id },
       data: { ultimoContatoEm: new Date() },
+      include: { responsavel: { select: { nome: true } } },
     });
   }
 }
