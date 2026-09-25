@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
@@ -32,6 +33,7 @@ import { UpdateMetaDto } from '../application/dto/update-meta.dto.js';
 import { ListMetasQueryDto } from '../application/dto/list-metas-query.dto.js';
 
 @ApiTags('Metas')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('metas')
 @UseGuards(RolesGuard)

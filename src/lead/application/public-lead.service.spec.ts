@@ -14,7 +14,7 @@ describe('PublicLeadService', () => {
   };
 
   function setup(fetchMock: jest.Mock) {
-    const repository = { create: jest.fn().mockResolvedValue({ id: 'lead-id' }) };
+    const repository = { create: jest.fn<(...args: any[]) => any>().mockResolvedValue({ id: 'lead-id' }) };
     const config = {
       get: jest.fn((key: string) =>
         ({
@@ -31,10 +31,10 @@ describe('PublicLeadService', () => {
   }
 
   it('persiste o lead e confirma o recebimento por email pro próprio cliente que entrou em contato', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
+    const fetchMock = jest.fn<(...args: any[]) => any>().mockResolvedValue({
       ok: true,
       status: 201,
-      json: jest.fn().mockResolvedValue({ messageId: 'email-id' }),
+      json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ messageId: 'email-id' }),
     });
     const { service, repository } = setup(fetchMock);
 
@@ -65,10 +65,10 @@ describe('PublicLeadService', () => {
   });
 
   it('deriva urgência mais alta pra leads de valor estimado alto, mesmo sem o form pedir isso ao visitante', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
+    const fetchMock = jest.fn<(...args: any[]) => any>().mockResolvedValue({
       ok: true,
       status: 201,
-      json: jest.fn().mockResolvedValue({ messageId: 'email-id' }),
+      json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ messageId: 'email-id' }),
     });
     const { service, repository } = setup(fetchMock);
 
@@ -80,10 +80,10 @@ describe('PublicLeadService', () => {
   });
 
   it('retorna erro explícito quando o envio via Brevo falha', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
+    const fetchMock = jest.fn<(...args: any[]) => any>().mockResolvedValue({
       ok: false,
       status: 401,
-      json: jest.fn().mockResolvedValue({ message: 'Key not found' }),
+      json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ message: 'Key not found' }),
     });
     const { service } = setup(fetchMock);
 
@@ -93,7 +93,7 @@ describe('PublicLeadService', () => {
   });
 
   it('recusa o contato antes de persistir se as credenciais do Brevo não estiverem configuradas', async () => {
-    const repository = { create: jest.fn() };
+    const repository = { create: jest.fn<(...args: any[]) => any>() };
     const config = { get: jest.fn(() => undefined) } as unknown as ConfigService;
     const service = new PublicLeadService(repository as never, config);
 

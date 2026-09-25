@@ -16,6 +16,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import argon2 from 'argon2';
@@ -31,6 +32,7 @@ import type { AuthenticatedUser } from '../domain/authenticated-user.js';
 import { ColaboradorService } from '../../colaborador/application/colaborador.service.js';
 
 @ApiTags('Autenticação')
+@ApiStandardErrors()
 @Controller('auth')
 export class AuthController {
   constructor(

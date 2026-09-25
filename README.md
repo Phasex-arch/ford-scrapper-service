@@ -133,19 +133,56 @@ Sobe PostgreSQL + API automaticamente.
 
 ---
 
+## 🔐 Autenticação e autorização
+
+- **Login:** `POST /api/auth/login` (`{ email, senha }`) valida a senha (hash argon2id)
+  e devolve `{ accessToken, user }`. Limite de 5 tentativas por minuto (429 depois disso).
+- **JWT:** assinado com HS256 usando `JWT_SECRET`; expira em `JWT_EXPIRES_IN` (padrão `8h`).
+  O payload leva `sub` (id), `email`, `role` e `nome`. Todas as rotas exigem
+  `Authorization: Bearer <token>`, exceto as marcadas com `@Public()`.
+- **Validação a cada request:** além da assinatura/expiração, a `JwtStrategy` recarrega
+  o colaborador no banco — colaborador desativado ou removido perde acesso na hora.
+- **Perfis (RBAC):** `ADMIN`, `GERENTE` e `FUNCIONARIO`, declarados por rota com
+  `@Roles(...)` e checados pelo `RolesGuard`.
+- **Endpoints públicos:** `GET /health`, `POST /auth/login`, `POST /auth/exchange`,
+  `POST /public/leads`, `GET/POST /avaliacoes` (e leitura pública de avaliações).
+- **Erros:** `401` token ausente/inválido/expirado · `403` perfil sem permissão ·
+  `404` recurso inexistente · `400` validação · `429` limite de tentativas. Todo erro
+  segue o mesmo formato: `{ statusCode, message, error, path, timestamp, requestId? }`.
+
+Detalhes: [`docs/AUTENTICACAO-JWT.md`](./docs/AUTENTICACAO-JWT.md). Índice completo da Sprint 3 (mapa dos critérios → onde está cada um): [`docs/SPRINT-3.md`](./docs/SPRINT-3.md).
+
+## 📚 Documentação
+
+| Assunto | Arquivo |
+|---|---|
+| Índice da Sprint 3 (critérios → onde está cada um) | [`docs/SPRINT-3.md`](./docs/SPRINT-3.md) |
+| Arquitetura: componentes, responsabilidades, fluxo e autenticação | [`docs/architecture/SOLUCAO.md`](./docs/architecture/SOLUCAO.md) · [`DIAGRAMS.md`](./docs/architecture/DIAGRAMS.md) |
+| Autenticação, autorização e JWT | [`docs/AUTENTICACAO-JWT.md`](./docs/AUTENTICACAO-JWT.md) |
+| REST nível 2: matriz endpoint × perfil × status | [`docs/REST.md`](./docs/REST.md) |
+| Testes automatizados e evidências | [`docs/TESTES.md`](./docs/TESTES.md) · [`docs/evidencias/`](./docs/evidencias) |
+| Swagger/OpenAPI e formato padrão de erro | [`docs/ERROS-E-SWAGGER.md`](./docs/ERROS-E-SWAGGER.md) |
+| Segurança, contratos com o frontend, operação | [`docs/CYBERSECURITY.md`](./docs/CYBERSECURITY.md) · [`INTEGRATION-CONTRACTS.md`](./docs/INTEGRATION-CONTRACTS.md) · [`OPERACAO.md`](./docs/OPERACAO.md) |
+
 ## 📡 Endpoints Principais
  
 ### Base URL: `http://localhost:3000/api`
 
+Documentação interativa (Swagger/OpenAPI): `http://localhost:3000/api/docs` — use o
+botão **Authorize** e cole o `accessToken` do login. Exemplos prontos de
+requisição em [`requests.http`](./requests.http).
+
 | Módulo | Método | Endpoint | Proteção | Descrição |
 |--------|--------|----------|----------|-----------|
-| **Auth** | POST | `/auth/login` | Pública | Login com registro/email e senha |
-| **Colaboradores** | POST | `/colaboradores` | ADMIN | Cadastro de novos colaboradores |
-| **Auth** | GET | `/auth/me` | JWT | Dados do usuário autenticado |
-| **Veículos** | GET | `/vehicles` | Pública | Catálogo de veículos Ford (filtros, paginação, sort) |
-| **Veículos** | GET | `/vehicles/:id` | Pública | Detalhes do veículo por UUID ou slug |
-| **Veículos** | POST | `/vehicles/sync` | JWT | Dispara sincronização com o site Ford |
-| **Veículos** | GET | `/vehicles/sync/history` | JWT | Histórico de execuções de sincronização |
+| **Auth** | POST | `/auth/login` | Pública | Login com e-mail e senha → devolve JWT |
+| **Auth** | GET/PATCH | `/auth/me` | JWT | Dados / edição do próprio perfil |
+| **Auth** | PATCH | `/auth/change-password` | JWT | Troca da própria senha |
+| **Colaboradores** | POST/DELETE | `/colaboradores` | ADMIN | Cadastro e remoção de colaboradores |
+| **Veículos** | GET | `/vehicles` | JWT (qualquer perfil) | Catálogo de veículos Ford (filtros, paginação, sort) |
+| **Veículos** | GET | `/vehicles/:id` | JWT (qualquer perfil) | Detalhes do veículo por UUID ou slug |
+| **Sync** | POST | `/sync` | ADMIN | Dispara sincronização com o site Ford |
+| **Sync** | GET | `/sync/history` | ADMIN/GERENTE | Histórico de execuções de sincronização |
+| **Auditoria** | GET | `/audit-log` | ADMIN | Log de auditoria de escritas |
 | **Estoque** | GET/POST | `/estoque` | JWT | Listagem e cadastro de veículos em estoque |
 | **Estoque** | GET/PATCH/DELETE | `/estoque/:id` | JWT | Consulta, edição e exclusão de item em estoque |
 | **Clientes** | GET/POST | `/clientes` | JWT | Listagem e cadastro de clientes |
@@ -258,11 +295,8 @@ npm run build
 # Produção
 npm run start:prod
 
-# Testes unitários
+# Testes (unitários de service + testes HTTP de auth/RBAC/erros com supertest)
 npm run test
-
-# Testes e2e
-npm run test:e2e
 
 # Coverage
 npm run test:cov

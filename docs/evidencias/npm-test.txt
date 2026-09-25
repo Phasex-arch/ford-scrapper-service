@@ -1,0 +1,64 @@
+# Evidência — execução de `npm test` (2026-09-25 10:25)
+
+Suítes: 7/7 passaram · Testes: 47/47 passaram · Falhas: 0
+
+PASS  src/auth/application/auth.service.spec.ts  (6/6)
+    ✓ AuthService › authenticates with correct credentials and returns a signed token
+    ✓ AuthService › rejects a wrong password without revealing which check failed
+    ✓ AuthService › rejects login for an inactive colaborador
+    ✓ AuthService › rejects login for an email that does not exist
+    ✓ AuthService › exchanges a freshly created code for a real token exactly once
+    ✓ AuthService › rejects an exchange code that was never issued
+
+PASS  src/colaborador/application/colaborador.service.spec.ts  (6/6)
+    ✓ ColaboradorService › creates a colaborador with normalized fields and a hashed password
+    ✓ ColaboradorService › rejects creation when the email is already registered
+    ✓ ColaboradorService › rejects creation when the CPF is already registered
+    ✓ ColaboradorService › rejects creation when the registro is already taken
+    ✓ ColaboradorService › throws when updating a colaborador that does not exist
+    ✓ ColaboradorService › soft-deletes instead of removing the row
+
+PASS  src/dashboard/application/dashboard.service.spec.ts  (9/9)
+    ✓ DashboardService — cálculo de deltas › pctDelta › computes a normal percentage variation
+    ✓ DashboardService — cálculo de deltas › pctDelta › returns null instead of Infinity when there was nothing in the previous period
+    ✓ DashboardService — cálculo de deltas › pctDelta › returns 0 (not null) when both periods had nothing
+    ✓ DashboardService — cálculo de deltas › amostraDelta › returns null when either side has zero samples, even if the raw value looks like a real change
+    ✓ DashboardService — cálculo de deltas › amostraDelta › computes a real point delta when both sides have samples
+    ✓ DashboardService — cálculo de deltas › amostraDelta › computes a real percentage delta when both sides have samples
+    ✓ DashboardService — cálculo de deltas › pctConversao › returns 0 instead of NaN when there were no leads
+    ✓ DashboardService — cálculo de deltas › pctConversao › rounds to one decimal place
+    ✓ DashboardService — cálculo de deltas › toRecord › folds groupBy rows into a plain count map
+
+PASS  src/http/api-http.spec.ts  (20/20)
+    ✓ API HTTP — autenticação, autorização e erros › endpoints públicos › GET /api/health responde 200 sem token
+    ✓ API HTTP — autenticação, autorização e erros › POST /api/auth/login › 200 com credenciais válidas: devolve JWT com sub/role e expiração de 1h
+    ✓ API HTTP — autenticação, autorização e erros › POST /api/auth/login › 401 com senha errada, no formato padronizado de erro
+    ✓ API HTTP — autenticação, autorização e erros › POST /api/auth/login › 401 com e-mail inexistente, sem revelar que o e-mail não existe
+    ✓ API HTTP — autenticação, autorização e erros › POST /api/auth/login › 400 quando o corpo é inválido (e-mail malformado, campo extra)
+    ✓ API HTTP — autenticação, autorização e erros › proteção por JWT (rotas protegidas) › 401 sem token
+    ✓ API HTTP — autenticação, autorização e erros › proteção por JWT (rotas protegidas) › 401 com token malformado
+    ✓ API HTTP — autenticação, autorização e erros › proteção por JWT (rotas protegidas) › 401 com token assinado por outro segredo
+    ✓ API HTTP — autenticação, autorização e erros › proteção por JWT (rotas protegidas) › 401 com token expirado
+    ✓ API HTTP — autenticação, autorização e erros › proteção por JWT (rotas protegidas) › 401 quando o colaborador foi desativado depois de receber o token
+    ✓ API HTTP — autenticação, autorização e erros › proteção por JWT (rotas protegidas) › 200 em GET /api/auth/me com token válido
+    ✓ API HTTP — autenticação, autorização e erros › autorização por perfil (RBAC) › FUNCIONARIO lista clientes (200, resposta paginada)
+    ✓ API HTTP — autenticação, autorização e erros › autorização por perfil (RBAC) › FUNCIONARIO não pode DELETE /clientes/:id → 403
+    ✓ API HTTP — autenticação, autorização e erros › autorização por perfil (RBAC) › GERENTE pode DELETE /clientes/:id → 204 sem corpo
+    ✓ API HTTP — autenticação, autorização e erros › autorização por perfil (RBAC) › GET /audit-log: GERENTE → 403, ADMIN → 200
+    ✓ API HTTP — autenticação, autorização e erros › semântica REST: status codes de recurso › 404 quando o recurso não existe, no formato padronizado
+    ✓ API HTTP — autenticação, autorização e erros › semântica REST: status codes de recurso › 400 quando o id da URL não é um UUID
+    ✓ API HTTP — autenticação, autorização e erros › semântica REST: status codes de recurso › 400 em POST /clientes com corpo inválido, listando todos os campos
+    ✓ API HTTP — autenticação, autorização e erros › semântica REST: status codes de recurso › 201 em POST /clientes com corpo válido
+    ✓ API HTTP — autenticação, autorização e erros › limite de tentativas de login › 429 depois de exceder 5 tentativas por minuto em /auth/login
+
+PASS  src/lead/application/public-lead.service.spec.ts  (4/4)
+    ✓ PublicLeadService › persiste o lead e confirma o recebimento por email pro próprio cliente que entrou em contato
+    ✓ PublicLeadService › deriva urgência mais alta pra leads de valor estimado alto, mesmo sem o form pedir isso ao visitante
+    ✓ PublicLeadService › retorna erro explícito quando o envio via Brevo falha
+    ✓ PublicLeadService › recusa o contato antes de persistir se as credenciais do Brevo não estiverem configuradas
+
+PASS  src/scrapper/application/scrapper/scrapper.service.spec.ts  (1/1)
+    ✓ ScrapperService › should be defined
+
+PASS  src/vehicle/application/vehicle/vehicle.service.spec.ts  (1/1)
+    ✓ VehicleService › should be defined

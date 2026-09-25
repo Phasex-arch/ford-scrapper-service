@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Patch, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
@@ -8,6 +9,7 @@ import { ConfiguracoesService } from '../application/configuracoes.service.js';
 import { UpdateConcessionariaDto } from '../application/dto/update-concessionaria.dto.js';
 
 @ApiTags('Configurações')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('configuracoes')
 @UseGuards(RolesGuard)

@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsInt,
@@ -11,6 +12,7 @@ import {
 } from 'class-validator';
 
 export class SearchQueryDto {
+  @ApiProperty({ example: 'ranger', description: 'Termo de busca (modelo, versão ou categoria)' })
   @IsString()
   @MinLength(1)
   @MaxLength(60)
@@ -19,6 +21,7 @@ export class SearchQueryDto {
   })
   q!: string;
 
+  @ApiPropertyOptional({ description: 'Página (a partir de 1)' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -26,6 +29,7 @@ export class SearchQueryDto {
   @Max(10_000)
   page?: number;
 
+  @ApiPropertyOptional({ description: 'Itens por página (1-100)' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

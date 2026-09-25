@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { ClienteStatus, Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
@@ -32,6 +33,7 @@ import { UpdateClienteDto } from '../application/dto/update-cliente.dto.js';
 import { ListClientesQueryDto } from '../application/dto/list-clientes-query.dto.js';
 
 @ApiTags('Clientes')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('clientes')
 @UseGuards(RolesGuard)

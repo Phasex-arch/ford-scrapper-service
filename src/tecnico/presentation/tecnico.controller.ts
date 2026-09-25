@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { Role, TecnicoStatus } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
@@ -32,6 +33,7 @@ import { UpdateTecnicoDto } from '../application/dto/update-tecnico.dto.js';
 import { ListTecnicosQueryDto } from '../application/dto/list-tecnicos-query.dto.js';
 
 @ApiTags('Técnicos')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('tecnicos')
 @UseGuards(RolesGuard)

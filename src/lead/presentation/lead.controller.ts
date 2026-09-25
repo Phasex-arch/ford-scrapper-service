@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { LeadUrgencia, Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
@@ -32,6 +33,7 @@ import { UpdateLeadDto } from '../application/dto/update-lead.dto.js';
 import { ListLeadsQueryDto } from '../application/dto/list-leads-query.dto.js';
 
 @ApiTags('Leads')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('leads')
 @UseGuards(RolesGuard)
