@@ -90,6 +90,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker build -t ford-backend:${{ github.sha }} .
+      # Smoke: sem npm na imagem, o prisma (migrate deploy no boot) e o
+      # usuário não-root precisam continuar funcionando.
+      - run: |
+          docker run --rm --entrypoint sh ford-backend:${{ github.sha }} -c \
+            'test "$(id -u)" != 0 && ./node_modules/.bin/prisma --version && ! command -v npm'
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ford-backend:${{ github.sha }}
