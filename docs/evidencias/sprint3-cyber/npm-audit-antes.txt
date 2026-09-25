@@ -1,0 +1,211 @@
+# npm audit report
+
+@hono/node-server  <=1.19.14
+Severity: moderate
+@hono/node-server: Middleware bypass via repeated slashes in serveStatic - https://github.com/advisories/GHSA-92pp-h63x-v22m
+Node.js Adapter for Hono: Path traversal in `serve-static` on Windows via encoded backslash (`%5C`) - https://github.com/advisories/GHSA-frvp-7c67-39w9
+fix available via `npm audit fix --force`
+Will install prisma@6.19.3, which is a breaking change
+node_modules/@hono/node-server
+  @prisma/dev  <=0.24.16
+  Depends on vulnerable versions of @hono/node-server
+  Depends on vulnerable versions of valibot
+  node_modules/@prisma/dev
+    prisma  6.13.0-dev.1 - 8.1.0-dev.6
+    Depends on vulnerable versions of @prisma/config
+    Depends on vulnerable versions of @prisma/dev
+    Depends on vulnerable versions of mysql2
+    node_modules/prisma
+
+@nestjs/core  <=11.1.17 || 12.0.0-alpha.0 - 12.0.0-alpha.7
+Severity: high
+@nestjs/core Improperly Neutralizes Special Elements in Output Used by a Downstream Component ('Injection') - https://github.com/advisories/GHSA-36xv-jgw5-4q75
+Depends on vulnerable versions of path-to-regexp
+fix available via `npm audit fix`
+node_modules/@nestjs/core
+
+@protobufjs/utf8  <=1.1.0
+Severity: moderate
+protobufjs has overlong UTF-8 decoding - https://github.com/advisories/GHSA-q6x5-8v7m-xcrf
+fix available via `npm audit fix`
+node_modules/@protobufjs/utf8
+
+body-parser  2.0.0 - 2.2.2
+body-parser vulnerable to denial of service when invalid limit value silently disables size enforcement - https://github.com/advisories/GHSA-v422-hmwv-36x6
+fix available via `npm audit fix`
+node_modules/body-parser
+
+deepmerge-ts  <8.0.0
+Severity: high
+DeepmergeTS has stack exhaustion when merging recursive object graphs - https://github.com/advisories/GHSA-ggr8-5vv4-36mx
+fix available via `npm audit fix --force`
+Will install prisma@6.19.3, which is a breaking change
+node_modules/deepmerge-ts
+  @prisma/config  6.13.0-dev.1 - 8.1.0-dev.4
+  Depends on vulnerable versions of deepmerge-ts
+  node_modules/@prisma/config
+
+fast-uri  3.0.0 - 3.1.5
+Severity: high
+fast-uri vulnerable to host confusion via literal backslash authority delimiter - https://github.com/advisories/GHSA-v2hh-gcrm-f6hx
+fast-uri vulnerable to host confusion via backslash authority introducer - https://github.com/advisories/GHSA-7p8r-x3mc-p8w7
+fast-uri vulnerable to path traversal via percent-encoded dot segments - https://github.com/advisories/GHSA-q3j6-qgpj-74h6
+fast-uri vulnerable to host confusion via percent-encoded authority delimiters - https://github.com/advisories/GHSA-v39h-62p7-jpjc
+fast-uri vulnerable to server-side request forgery via malformed IPv6 normalization - https://github.com/advisories/GHSA-f65p-4m7j-42xc
+fast-uri vulnerable to host confusion via percent-encoded scheme normalization - https://github.com/advisories/GHSA-jqff-g426-hqxp
+fast-uri vulnerable to host confusion via failed IDN canonicalization - https://github.com/advisories/GHSA-4c8g-83qw-93j6
+fix available via `npm audit fix`
+node_modules/fast-uri
+
+hono  <=4.13.4
+Severity: high
+Hono: Non-breaking space prefix bypass in cookie name handling in getCookie() - https://github.com/advisories/GHSA-r5rp-j6wh-rvv4
+Hono: Path traversal in toSSG() allows writing files outside the output directory - https://github.com/advisories/GHSA-xf4j-xp2r-rqqx
+Hono: Middleware bypass via repeated slashes in serveStatic - https://github.com/advisories/GHSA-wmmm-f939-6g9c
+Hono has incorrect IP matching in ipRestriction() for IPv4-mapped IPv6 addresses - https://github.com/advisories/GHSA-xpcf-pg52-r92g
+Hono has CSS Declaration Injection via Style Object Values in JSX SSR - https://github.com/advisories/GHSA-qp7p-654g-cw7p
+Hono has improper validation of NumericDate claims (exp, nbf, iat) in JWT verify() - https://github.com/advisories/GHSA-hm8q-7f3q-5f36
+Hono's Cache Middleware ignores Vary: Authorization / Vary: Cookie leading to cross-user cache leakage - https://github.com/advisories/GHSA-p77w-8qqv-26rm
+Hono: bodyLimit() can be bypassed for chunked / unknown-length requests - https://github.com/advisories/GHSA-9vqf-7f2p-gf9v
+hono/jsx has Unvalidated JSX Tag Names that May Allow HTML Injection - https://github.com/advisories/GHSA-69xw-7hcm-h432
+Hono: IP Restriction bypasses static deny rules for non-canonical IPv6  - https://github.com/advisories/GHSA-xrhx-7g5j-rcj5
+Hono: Cookie helper does not sanitize sameSite and priority, allowing Set-Cookie injection - https://github.com/advisories/GHSA-3hrh-pfw6-9m5x
+Hono: JWT middleware accepts any Authorization scheme, not only Bearer - https://github.com/advisories/GHSA-f577-qrjj-4474
+Hono: app.mount() strips mount prefix using undecoded path, causing incorrect routing for percent-encoded paths - https://github.com/advisories/GHSA-2gcr-mfcq-wcc3
+hono Improperly Handles JSX Attribute Names Allows HTML Injection in hono/jsx SSR - https://github.com/advisories/GHSA-458j-xx4x-4375
+hono: Body Limit Middleware can be bypassed on AWS Lambda by understating `Content-Length` - https://github.com/advisories/GHSA-rv63-4mwf-qqc2
+hono: Lambda@Edge adapter keeps only the last value of a repeated request header, dropping the rest - https://github.com/advisories/GHSA-wgpf-jwqj-8h8p
+hono: CORS Middleware reflects any Origin with credentials when `origin` defaults to the wildcard - https://github.com/advisories/GHSA-88fw-hqm2-52qc
+hono: Path traversal in `serve-static` on Windows via encoded backslash (`%5C`) - https://github.com/advisories/GHSA-wwfh-h76j-fc44
+hono: AWS Lambda adapter merges multiple `Set-Cookie` headers into one value, dropping cookies on ALB single-header and Lattice - https://github.com/advisories/GHSA-j6c9-x7qj-28xf
+Hono: API Gateway v1 adapter can drop a distinct repeated request header value during de-duplication - https://github.com/advisories/GHSA-xgm2-5f3f-mvvc
+hono/jsx does not isolate context per request, leading to cross-request data disclosure - https://github.com/advisories/GHSA-hvrm-45r6-mjfj
+Hono: Server-Side XSS via JSX Escaping Bypass in cx() Utility - https://github.com/advisories/GHSA-w62v-xxxg-mg59
+Hono: ReDoS in CORS middleware via Access-Control-Request-Headers - https://github.com/advisories/GHSA-8j4g-w8fx-2239
+Hono: `memo()` retains SSR output across requests, leading to cross-user data disclosure - https://github.com/advisories/GHSA-f23p-vx2j-j53r
+Hono: Proxy Helper does not remove response headers listed in the `Connection` header - https://github.com/advisories/GHSA-79qm-7rj5-m7r9
+Hono: Algorithmic Complexity DoS in Language Middleware - https://github.com/advisories/GHSA-54fx-42gc-7vw4
+Hono: Incomplete fix for CVE-2026-39408: `toSSG()` still writes files outside the output directory - https://github.com/advisories/GHSA-gqvv-2mrq-wpjv
+Hono: Unbounded dot-notation nesting in `parseBody()` can cause memory exhaustion - https://github.com/advisories/GHSA-g6gw-c38x-mqfc
+Hono: Query parser reads parameters after the URL fragment, causing cache-key and proxy interpretation differentials - https://github.com/advisories/GHSA-crvj-82cr-hjcx
+Hono missing validation of cookie name on write path in setCookie() - https://github.com/advisories/GHSA-26pp-8wgv-hjvm
+fix available via `npm audit fix`
+node_modules/hono
+
+js-yaml  4.0.0 - 4.3.1
+Severity: high
+JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases - https://github.com/advisories/GHSA-h67p-54hq-rp68
+js-yaml: YAML merge-key chains can force quadratic CPU consumption - https://github.com/advisories/GHSA-52cp-r559-cp3m
+JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported - https://github.com/advisories/GHSA-5p4m-2wfm-xmqj
+js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources - https://github.com/advisories/GHSA-2883-xcg3-v3hh
+fix available via `npm audit fix`
+node_modules/js-yaml
+  @nestjs/swagger  1.1.0 - 1.1.4 || 3.0.1 - 11.4.4 || 12.0.0-alpha.0 - 12.0.0-alpha.2
+  Depends on vulnerable versions of js-yaml
+  Depends on vulnerable versions of lodash
+  Depends on vulnerable versions of path-to-regexp
+  node_modules/@nestjs/swagger
+
+lodash  <=4.17.23
+Severity: high
+lodash vulnerable to Code Injection via `_.template` imports key names - https://github.com/advisories/GHSA-r5fr-rjxr-66jc
+lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit` - https://github.com/advisories/GHSA-f23m-r3pf-42rh
+fix available via `npm audit fix`
+node_modules/@nestjs/config/node_modules/lodash
+node_modules/@nestjs/swagger/node_modules/lodash
+  @nestjs/config  1.1.6 - 4.0.3
+  Depends on vulnerable versions of lodash
+  node_modules/@nestjs/config
+
+multer  <=2.2.0
+Severity: high
+Multer vulnerable to Denial of Service via deeply nested field names - https://github.com/advisories/GHSA-72gw-mp4g-v24j
+Multer vulnerable to Denial of Service via incomplete cleanup of aborted uploads - https://github.com/advisories/GHSA-3p4h-7m6x-2hcm
+multer vulnerable to Denial of Service via crafted multipart field names - https://github.com/advisories/GHSA-wc9g-mqfw-jrwm
+multer vulnerable to file size limit bypass via async fileFilter race condition - https://github.com/advisories/GHSA-qvfw-j98x-7q72
+multer vulnerable to Denial of Service via oversized array index in field names - https://github.com/advisories/GHSA-535w-7cp7-47q4
+fix available via `npm audit fix`
+node_modules/multer
+  @nestjs/platform-express  <=11.1.27 || 12.0.0-alpha.0 - 12.0.0-alpha.7
+  Depends on vulnerable versions of multer
+  Depends on vulnerable versions of path-to-regexp
+  node_modules/@nestjs/platform-express
+
+mysql2  <=3.23.0
+Severity: high
+MySQL2: Auth Plugin Downgrade to mysql_clear_password Leaks Plaintext Credentials - https://github.com/advisories/GHSA-3f6p-5ww8-9rcr
+MySQL2: Unbounded zlib inflate in compressed MySQL protocol handler allows decompression-bomb DoS - https://github.com/advisories/GHSA-rgwj-5xj2-c3m3
+fix available via `npm audit fix --force`
+Will install prisma@6.19.3, which is a breaking change
+node_modules/mysql2
+
+path-to-regexp  8.0.0 - 8.3.0
+Severity: high
+path-to-regexp vulnerable to Denial of Service via sequential optional groups - https://github.com/advisories/GHSA-j3q9-mxjg-w52f
+path-to-regexp vulnerable to Regular Expression Denial of Service via multiple wildcards - https://github.com/advisories/GHSA-27v5-c462-wpq7
+fix available via `npm audit fix`
+node_modules/path-to-regexp
+
+protobufjs  <=7.6.4
+Severity: critical
+Arbitrary code execution in protobufjs - https://github.com/advisories/GHSA-xq3m-2v4x-88gg
+protobuf.js: Code injection through bytes field defaults in generated toObject code - https://github.com/advisories/GHSA-66ff-xgx4-vchm
+protobuf.js: Denial of service from crafted field names in generated code - https://github.com/advisories/GHSA-2pr8-phx7-x9h3
+protobuf.js: Prototype injection in generated message constructors - https://github.com/advisories/GHSA-fx83-v9x8-x52w
+protobuf.js: Code generation gadget after prototype pollution - https://github.com/advisories/GHSA-75px-5xx7-5xc7
+protobuf.js: Process-wide denial of service through unsafe option paths - https://github.com/advisories/GHSA-jvwf-75h9-cwgg
+protobuf.js: Denial of service through unbounded protobuf recursion - https://github.com/advisories/GHSA-685m-2w69-288q
+protobufjs has overlong UTF-8 decoding - https://github.com/advisories/GHSA-q6x5-8v7m-xcrf
+protobufjs: Denial of Service via unbounded recursive JSON descriptor expansion - https://github.com/advisories/GHSA-jggg-4jg4-v7c6
+protobufjs: Denial of service through unbounded Any expansion during JSON conversion - https://github.com/advisories/GHSA-wcpc-wj8m-hjx6
+protobufjs : Schema-derived names can shadow runtime-significant properties - https://github.com/advisories/GHSA-f38q-mgvj-vph7
+protobufjs: Denial of Service via infinite loop in .proto option parsing - https://github.com/advisories/GHSA-j3f2-48v5-ccww
+fix available via `npm audit fix`
+node_modules/protobufjs
+
+qs  2.2.5 - 6.15.3
+Severity: moderate
+qs has a remotely triggerable DoS: qs.stringify crashes with TypeError on null/undefined entries in comma-format arrays when encodeValuesOnly is set - https://github.com/advisories/GHSA-q8mj-m7cp-5q26
+qs array-limit bypass via bracket-key comma parsing - https://github.com/advisories/GHSA-x5fp-wj9c-mxmx
+qs: Denial of Service via Attacker Controlled isBuffer - https://github.com/advisories/GHSA-4mjr-xmp4-gh2g
+fix available via `npm audit fix`
+node_modules/qs
+
+undici  7.0.0 - 7.28.0
+Severity: high
+undici vulnerable to TLS certificate validation bypass via dropped requestTls in SOCKS5 ProxyAgent - https://github.com/advisories/GHSA-vmh5-mc38-953g
+undici vulnerable to HTTP header injection via Set-Cookie percent-decoding - https://github.com/advisories/GHSA-p88m-4jfj-68fv
+undici WebSocket client vulnerable to denial of service via fragment count bypass - https://github.com/advisories/GHSA-vxpw-j846-p89q
+undici vulnerable to cross-origin request routing via SOCKS5 proxy pool reuse - https://github.com/advisories/GHSA-hm92-r4w5-c3mj
+undici vulnerable to Set-Cookie SameSite attribute downgrade via permissive substring matching - https://github.com/advisories/GHSA-g8m3-5g58-fq7m
+undici vulnerable to cross-user information disclosure via shared cache whitespace bypass - https://github.com/advisories/GHSA-pr7r-676h-xcf6
+undici vulnerable to downstream response desynchronization via retry interceptor - https://github.com/advisories/GHSA-8xcm-r25x-g524
+undici vulnerable to cross-user information disclosure and parse-time crash via degenerate private cache directives - https://github.com/advisories/GHSA-4cwx-7wf7-3272
+undici vulnerable to CRLF Injection via blob-like body 'type' property - https://github.com/advisories/GHSA-m8rv-5g2x-5cg5
+undici vulnerable to cross-user information disclosure via whitespace around equals in Cache-Control directives - https://github.com/advisories/GHSA-jr45-8vmc-qm54
+undici vulnerable to cookie attribute injection via unsanitized domain and unparsed setCookie fields - https://github.com/advisories/GHSA-v3r7-h72x-cjcm
+undici vulnerable to HTTP response queue poisoning via keep-alive socket reuse - https://github.com/advisories/GHSA-35p6-xmwp-9g52
+fix available via `npm audit fix`
+node_modules/undici
+
+valibot  <=1.4.1
+Severity: moderate
+Valibot: record() issue paths can make flatten() throw for inherited Object property names - https://github.com/advisories/GHSA-5qjj-4xww-7phc
+fix available via `npm audit fix --force`
+Will install prisma@6.19.3, which is a breaking change
+node_modules/valibot
+
+ws  8.0.0 - 8.20.1
+Severity: high
+ws: Uninitialized memory disclosure - https://github.com/advisories/GHSA-58qx-3vcg-4xpx
+ws: Memory exhaustion DoS from tiny fragments and data chunks - https://github.com/advisories/GHSA-96hv-2xvq-fx4p
+fix available via `npm audit fix`
+node_modules/ws
+
+23 vulnerabilities (1 low, 5 moderate, 16 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
