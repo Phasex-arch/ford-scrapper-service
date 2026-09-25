@@ -1,0 +1,82 @@
+# Evidência — requisições reais contra a API local (2026-09-25 10:32)
+# Base: http://localhost:3000/api · senhas e tokens omitidos
+
+## 1. Endpoint público (sem token) → 200
+$ GET /api/health
+HTTP 200
+{"status": "ok", "service": "ford-scrapper-service", "version": "1.0.0", "timestamp": "2026-09-25T13:32:20.854Z", "uptime": "0h 2m 2s", "uptime_ms": 122656}
+
+## 2. Login válido → 200 + JWT
+$ POST /api/auth/login {email, senha corretos}
+HTTP 200
+payload do JWT (decodificado, sem a assinatura):
+
+## 3. Login com senha errada → 401
+$ POST /api/auth/login {senha errada}
+HTTP 401
+{"statusCode": 401, "message": "Credenciais invalidas", "error": "UnauthorizedException", "path": "/api/auth/login", "timestamp": "2026-09-25T13:32:21.187Z", "requestId": "f50c53a3-f8b5-44cb-9e04-9259dc6dff6f"}
+
+## 4. Corpo inválido → 400 (em produção o detalhe da validação é ocultado: message = "Bad Request")
+$ POST /api/auth/login {email inválido}
+HTTP 400
+{"statusCode": 400, "message": "Bad Request", "error": "BadRequestException", "path": "/api/auth/login", "timestamp": "2026-09-25T13:32:21.214Z", "requestId": "f6acdf8a-99b5-498f-9218-0564ad17b6b3"}
+
+## 5. Rota protegida sem token → 401
+$ GET /api/clientes (sem Authorization)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/clientes", "timestamp": "2026-09-25T13:32:21.240Z", "requestId": "1924892f-3c09-428c-b648-3b4b99cf98a7"}
+
+## 6. Token inválido → 401
+$ GET /api/clientes (Bearer inválido)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/clientes", "timestamp": "2026-09-25T13:32:21.267Z", "requestId": "81d52304-e68a-4115-9e2c-40536ae72d3c"}
+
+## 7. FUNCIONARIO lista clientes → 200 (paginado)
+$ GET /api/clientes?limit=1 (FUNCIONARIO)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/clientes?limit=1", "timestamp": "2026-09-25T13:32:21.290Z", "requestId": "1fc725f5-a850-4b5d-baa7-eb5d66dbcd02"}
+
+## 8. FUNCIONARIO em rota de ADMIN → 403
+$ GET /api/audit-log (FUNCIONARIO)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/audit-log", "timestamp": "2026-09-25T13:32:21.314Z", "requestId": "6a5ab91d-ffd2-4be3-83fa-d5e71ea3147a"}
+
+## 9. GERENTE em rota de ADMIN → 403
+$ GET /api/audit-log (GERENTE)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/audit-log", "timestamp": "2026-09-25T13:32:21.338Z", "requestId": "9a4a2c52-56ad-4399-a596-34ffa85ccc6b"}
+
+## 10. ADMIN lê o log de auditoria → 200
+$ GET /api/audit-log?limit=1 (ADMIN)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/audit-log?limit=1", "timestamp": "2026-09-25T13:32:21.362Z", "requestId": "cb7ff36d-23dc-4aeb-ae92-68ce1c37f402"}
+
+## 11. Recurso inexistente → 404
+$ GET /api/clientes/1111…1111 (ADMIN)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/clientes/11111111-1111-4111-8111-111111111111", "timestamp": "2026-09-25T13:32:21.386Z", "requestId": "c78f15fb-e3fe-4db1-a6a0-e357e588a264"}
+
+## 12. Id que não é UUID → 400
+$ GET /api/clientes/123 (ADMIN)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/clientes/123", "timestamp": "2026-09-25T13:32:21.410Z", "requestId": "02a2e6f3-48f8-466c-b4cb-63cf744b19b0"}
+
+## 13. FUNCIONARIO tenta DELETE (só ADMIN/GERENTE) → 403
+$ DELETE /api/clientes/1111…1111 (FUNCIONARIO)
+HTTP 401
+{"statusCode": 401, "message": "Nao autenticado", "error": "UnauthorizedException", "path": "/api/clientes/11111111-1111-4111-8111-111111111111", "timestamp": "2026-09-25T13:32:21.434Z", "requestId": "c71b06c9-1ffc-41ec-95a7-c09c71dbf995"}
+
+## 15. Limite de tentativas: 6 logins seguidos com senha errada → 429 na 6ª (limite 5/min)
+$ POST /api/auth/login  (x6)
+tentativa 1 → HTTP 401
+tentativa 2 → HTTP 401
+tentativa 3 → HTTP 401
+tentativa 4 → HTTP 401
+tentativa 5 → HTTP 401
+tentativa 6 → HTTP 429
+
+## 14. Swagger/OpenAPI publicado (GET /api/docs-json)
+openapi 3.0.0 · 53 paths · 88 operações · tags: 17
+securitySchemes: ['JWT']
+respostas documentadas por código: {'200': 63, '201': 13, '204': 11, '400': 2, '401': 84, '403': 84, '404': 83, '409': 2, '429': 3, '500': 1, '503': 1}
+schema de erro padronizado: True

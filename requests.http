@@ -1,138 +1,150 @@
-### Ford Brasil Vehicle Catalog API — HTTP Requests
-### Base URL: http://localhost:3000/api/v1
+### Ford One API — requisições de exemplo (REST Client do VS Code / IntelliJ HTTP Client)
+### Prefixo global: /api (sem versionamento). Documentação interativa: {{baseUrl}}/docs
+###
+### Como usar: rode primeiro um dos logins (ADMIN, GERENTE ou FUNCIONARIO);
+### o token da resposta fica guardado em `token` e é usado nas demais chamadas.
+### As senhas vêm do seu .env (ADMIN_SENHA / GERENTE_SENHA / FUNCIONARIO_SENHA).
+
+@baseUrl = http://localhost:3000/api
+@adminEmail = admin@ford.com.br
+@adminSenha = TROQUE_PELA_ADMIN_SENHA_DO_ENV
+@gerenteEmail = ricardo.costa@ford.com.br
+@gerenteSenha = TROQUE_PELA_GERENTE_SENHA_DO_ENV
+@funcEmail = patricia.oliveira@ford.com.br
+@funcSenha = TROQUE_PELA_FUNCIONARIO_SENHA_DO_ENV
 
 ### ============================================
-### Health
+### 1. Endpoint PÚBLICO (sem token) — 200
 ### ============================================
 
-### Health Check
-GET http://localhost:3000/api/v1/health
+# @name health
+GET {{baseUrl}}/health
 
 ### ============================================
-### Vehicles
+### 2. Login (público) — 200 com { accessToken, user }
 ### ============================================
 
-### List all vehicles (default pagination)
-GET http://localhost:3000/api/v1/vehicles
-
-### List vehicles — page 2
-GET http://localhost:3000/api/v1/vehicles?page=2&limit=10
-
-### Filter by category
-GET http://localhost:3000/api/v1/vehicles?categoria=Picape
-
-### Filter by model
-GET http://localhost:3000/api/v1/vehicles?modelo=Ranger
-
-### Filter by version
-GET http://localhost:3000/api/v1/vehicles?versao=Raptor
-
-### Filter by color
-GET http://localhost:3000/api/v1/vehicles?cor=Branco
-
-### Filter by vehicle type
-GET http://localhost:3000/api/v1/vehicles?tipo_veiculo=SUV
-
-### Filter by fuel type
-GET http://localhost:3000/api/v1/vehicles?combustivel=Diesel
-
-### Filter by traction
-GET http://localhost:3000/api/v1/vehicles?tracao=4WD
-
-### Filter by transmission
-GET http://localhost:3000/api/v1/vehicles?transmissao=Automática
-
-### Filter by price range
-GET http://localhost:3000/api/v1/vehicles?preco_min=100000&preco_max=300000
-
-### Sort by price ascending
-GET http://localhost:3000/api/v1/vehicles?sort=preco_asc
-
-### Sort by price descending
-GET http://localhost:3000/api/v1/vehicles?sort=preco_desc
-
-### Combined filters
-GET http://localhost:3000/api/v1/vehicles?categoria=Picape&combustivel=Diesel&sort=preco_asc&page=1&limit=5
-
-### Get vehicle by ID (replace with actual UUID)
-GET http://localhost:3000/api/v1/vehicles/some-uuid-here
-
-### Get vehicle by slug
-GET http://localhost:3000/api/v1/vehicles/ranger-raptor-4wd-at
-
-### ============================================
-### Categories
-### ============================================
-
-### List all categories
-GET http://localhost:3000/api/v1/categories
-
-### ============================================
-### Colors
-### ============================================
-
-### List all colors
-GET http://localhost:3000/api/v1/colors
-
-### ============================================
-### Models
-### ============================================
-
-### List all models
-GET http://localhost:3000/api/v1/models
-
-### ============================================
-### Versions
-### ============================================
-
-### List all versions
-GET http://localhost:3000/api/v1/versions
-
-### ============================================
-### Search
-### ============================================
-
-### Search vehicles
-GET http://localhost:3000/api/v1/search?q=ranger
-
-### Search with pagination
-GET http://localhost:3000/api/v1/search?q=territory&page=1&limit=5
-
-### ============================================
-### Sync
-### ============================================
-
-### Trigger full sync (scrape + persist)
-POST http://localhost:3000/api/v1/sync
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
-### Get sync history
-GET http://localhost:3000/api/v1/sync/history
+{ "email": "{{adminEmail}}", "senha": "{{adminSenha}}" }
 
-### Get last 5 sync runs
-GET http://localhost:3000/api/v1/sync/history?limit=5
+###
+@token = {{loginAdmin.response.body.accessToken}}
 
-### ============================================
-### Sources
-### ============================================
-
-### List all official sources
-GET http://localhost:3000/api/v1/sources
-
-### ============================================
-### Stats
-### ============================================
-
-### Get catalog statistics
-GET http://localhost:3000/api/v1/stats
-
-### ============================================
-### Legacy Scrapper Endpoints (under /api/v1 prefix)
-### ============================================
-
-### Scrape Ford (GET — returns data only, doesn't persist)
-GET http://localhost:3000/api/v1/scrapper/ford
-
-### Scrape Ford (POST — scrapes and persists)
-POST http://localhost:3000/api/v1/scrapper/ford
+# @name loginGerente
+POST {{baseUrl}}/auth/login
 Content-Type: application/json
+
+{ "email": "{{gerenteEmail}}", "senha": "{{gerenteSenha}}" }
+
+###
+@tokenGerente = {{loginGerente.response.body.accessToken}}
+
+# @name loginFuncionario
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{funcEmail}}", "senha": "{{funcSenha}}" }
+
+###
+@tokenFuncionario = {{loginFuncionario.response.body.accessToken}}
+
+### Login com senha errada — 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{adminEmail}}", "senha": "SenhaErrada99" }
+
+### Login com corpo inválido — 400 (message é uma lista)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "nao-e-email", "senha": "x" }
+
+### ============================================
+### 3. Rotas PROTEGIDAS — precisam de Authorization: Bearer <token>
+### ============================================
+
+### Sem token — 401
+GET {{baseUrl}}/clientes
+
+### Token inválido — 401
+GET {{baseUrl}}/clientes
+Authorization: Bearer isso.nao.e-um-jwt
+
+### Dados do usuário logado — 200
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### Listar clientes (paginado) — 200
+GET {{baseUrl}}/clientes?page=1&limit=5
+Authorization: Bearer {{tokenFuncionario}}
+
+### Buscar cliente inexistente — 404 (formato padronizado de erro)
+GET {{baseUrl}}/clientes/11111111-1111-4111-8111-111111111111
+Authorization: Bearer {{token}}
+
+### Id que não é UUID — 400
+GET {{baseUrl}}/clientes/123
+Authorization: Bearer {{token}}
+
+### ============================================
+### 4. Autorização por perfil (RBAC)
+### ============================================
+
+### FUNCIONARIO tentando ler o log de auditoria (só ADMIN) — 403
+GET {{baseUrl}}/audit-log
+Authorization: Bearer {{tokenFuncionario}}
+
+### GERENTE tentando ler o log de auditoria — 403
+GET {{baseUrl}}/audit-log
+Authorization: Bearer {{tokenGerente}}
+
+### ADMIN lendo o log de auditoria — 200
+GET {{baseUrl}}/audit-log?page=1&limit=5
+Authorization: Bearer {{token}}
+
+### FUNCIONARIO tentando remover cliente (só ADMIN/GERENTE) — 403
+DELETE {{baseUrl}}/clientes/11111111-1111-4111-8111-111111111111
+Authorization: Bearer {{tokenFuncionario}}
+
+### ============================================
+### 5. Recursos do painel (todos exigem token)
+### ============================================
+
+### Leads
+GET {{baseUrl}}/leads?page=1&limit=5
+Authorization: Bearer {{tokenFuncionario}}
+
+### Estoque
+GET {{baseUrl}}/estoque?page=1&limit=5
+Authorization: Bearer {{tokenFuncionario}}
+
+### Ordens de serviço
+GET {{baseUrl}}/servicos?status=PREVISTO
+Authorization: Bearer {{tokenFuncionario}}
+
+### Dashboard (5 períodos: hoje, semana, mes, trimestre, ano)
+GET {{baseUrl}}/dashboard?periodo=mes
+Authorization: Bearer {{tokenFuncionario}}
+
+### Catálogo de veículos Ford (protegido por JWT)
+GET {{baseUrl}}/vehicles?modelo=Ranger&page=1&limit=5
+Authorization: Bearer {{tokenFuncionario}}
+
+### ============================================
+### 6. Captação pública de lead (sem token) — 201; corpo inválido → 400
+### ============================================
+
+POST {{baseUrl}}/public/leads
+Content-Type: application/json
+
+{
+  "nome": "Maria de Teste",
+  "email": "maria.teste@example.com",
+  "telefone": "(11) 98765-4321",
+  "veiculoInteresse": "Ford Ranger Storm",
+  "mensagem": "Gostaria de receber uma proposta."
+}
