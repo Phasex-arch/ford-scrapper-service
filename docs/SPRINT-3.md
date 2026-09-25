@@ -41,7 +41,7 @@ Produção: https://ford-backend-pdvb.onrender.com/api/docs
 ## O que foi ajustado nesta sprint
 
 - **Novo** `src/http/api-http.spec.ts` — 20 testes HTTP: sucesso, erro, 401, 403, 404, 429.
-- **Swagger:** decorator `@ApiStandardErrors()` (401/403/404 + schema de erro padronizado) nos 16
+- **Swagger:** decorator `@ApiStandardErrors()` (401/403/404 + schema de erro padronizado) nos 18
   controllers protegidos; `@ApiProperty` nos DTOs de query do catálogo.
 - **`requests.http`** reescrito (apontava para `/api/v1`, inexistente).
 - **README** corrigido: tabela de endpoints com a proteção real e seção "Autenticação e autorização".

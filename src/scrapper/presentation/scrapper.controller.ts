@@ -4,6 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { ScrapperService } from '../application/scrapper.js';
 import type { FordCatalogResponse } from '../domain/scrapped-info.js';
 
@@ -15,6 +16,7 @@ import type { FordCatalogResponse } from '../domain/scrapped-info.js';
  */
 @ApiTags('Coleta de dados')
 @ApiBearerAuth('JWT')
+@ApiStandardErrors()
 @Controller('scrapper')
 @UseGuards(RolesGuard)
 export class ScrapperController {
