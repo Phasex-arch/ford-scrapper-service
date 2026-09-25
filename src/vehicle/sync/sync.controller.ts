@@ -12,6 +12,7 @@ import { SyncService } from './sync.service.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
 import { Role } from '../../../generated/prisma/enums.js';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 
 class HistoryQueryDto {
   @IsOptional()
@@ -24,6 +25,7 @@ class HistoryQueryDto {
 
 @ApiTags('Sincronização')
 @ApiBearerAuth('JWT')
+@ApiStandardErrors()
 @UseGuards(RolesGuard)
 @Controller('sync')
 export class SyncController {
@@ -40,11 +42,6 @@ export class SyncController {
     status: 201,
     description: 'Sincronização concluída com resumo do resultado',
   })
-  @ApiResponse({
-    status: 401,
-    description: 'Token de autenticação ausente ou inválido',
-  })
-  @ApiResponse({ status: 403, description: 'Perfil sem permissão' })
   async triggerSync() {
     this.logger.log('POST /sync — triggering full sync');
     return this.syncService.executeSyncRun();
