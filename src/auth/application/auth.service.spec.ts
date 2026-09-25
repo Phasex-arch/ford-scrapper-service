@@ -22,11 +22,11 @@ describe('AuthService', () => {
       parallelism: 1,
     });
     const repo = {
-      findByEmail: jest.fn().mockResolvedValue({ ...colaborador, senha: senhaHash, ...overrides }),
+      findByEmail: jest.fn<(...args: any[]) => any>().mockResolvedValue({ ...colaborador, senha: senhaHash, ...overrides }),
     };
-    const jwtService = { sign: jest.fn().mockReturnValue('signed.jwt.token') };
-    const config = { get: jest.fn().mockReturnValue('8h') };
-    const securityLogger = { log: jest.fn().mockResolvedValue(undefined) };
+    const jwtService = { sign: jest.fn<(...args: any[]) => any>().mockReturnValue('signed.jwt.token') };
+    const config = { get: jest.fn<(...args: any[]) => any>().mockReturnValue('8h') };
+    const securityLogger = { log: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined) };
     const exchangeCodeService = new ExchangeCodeService();
 
     const service = new AuthService(

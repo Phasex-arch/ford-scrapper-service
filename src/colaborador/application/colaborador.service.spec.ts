@@ -18,13 +18,13 @@ describe('ColaboradorService', () => {
 
   function setup() {
     const repo = {
-      findByEmail: jest.fn().mockResolvedValue(null),
-      findByCpf: jest.fn().mockResolvedValue(null),
-      findByRegistro: jest.fn().mockResolvedValue(null),
-      findById: jest.fn().mockResolvedValue({ id: 'colab-1' }),
-      create: jest.fn().mockResolvedValue({ id: 'colab-1' }),
-      update: jest.fn().mockResolvedValue({ id: 'colab-1' }),
-      softDelete: jest.fn().mockResolvedValue({ id: 'colab-1', ativo: false }),
+      findByEmail: jest.fn<(...args: any[]) => any>().mockResolvedValue(null),
+      findByCpf: jest.fn<(...args: any[]) => any>().mockResolvedValue(null),
+      findByRegistro: jest.fn<(...args: any[]) => any>().mockResolvedValue(null),
+      findById: jest.fn<(...args: any[]) => any>().mockResolvedValue({ id: 'colab-1' }),
+      create: jest.fn<(...args: any[]) => any>().mockResolvedValue({ id: 'colab-1' }),
+      update: jest.fn<(...args: any[]) => any>().mockResolvedValue({ id: 'colab-1' }),
+      softDelete: jest.fn<(...args: any[]) => any>().mockResolvedValue({ id: 'colab-1', ativo: false }),
     };
     return { service: new ColaboradorService(repo as never), repo };
   }
