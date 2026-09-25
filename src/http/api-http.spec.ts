@@ -36,8 +36,11 @@ import { ColaboradorService } from '../colaborador/application/colaborador.servi
 import { HttpExceptionFilter } from '../common/filters/http-exception.filter.js';
 import { SecurityEventLogger } from '../common/security/security-event.logger.js';
 import { HealthController } from '../health/health.controller.js';
+import { MetricsController } from '../health/metrics.controller.js';
+import { MetricsService } from '../common/metrics/metrics.service.js';
 
 const JWT_SECRET = 'segredo-de-teste-com-mais-de-32-caracteres!!';
+const METRICS_TOKEN = 'token-de-metricas-de-teste';
 const SENHA = 'Senha@Forte123';
 const UUID_INEXISTENTE = '11111111-1111-4111-8111-111111111111';
 
@@ -107,19 +110,20 @@ describe('API HTTP — autenticação, autorização e erros', () => {
         ConfigModule.forRoot({
           isGlobal: true,
           ignoreEnvFile: true,
-          load: [() => ({ JWT_SECRET, JWT_EXPIRES_IN: '1h' })],
+          load: [() => ({ JWT_SECRET, JWT_EXPIRES_IN: '1h', METRICS_TOKEN })],
         }),
         PassportModule.register({ defaultStrategy: 'jwt' }),
         JwtModule.register({ secret: JWT_SECRET, signOptions: { expiresIn: '1h', algorithm: 'HS256' } }),
         ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 60 }] }),
       ],
-      controllers: [AuthController, HealthController, ClienteController, AuditLogController],
+      controllers: [AuthController, HealthController, MetricsController, ClienteController, AuditLogController],
       providers: [
         AuthService,
         ExchangeCodeService,
         JwtStrategy,
         JwtAuthGuard,
         RolesGuard,
+        MetricsService,
         { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: ColaboradorAuthRepository, useValue: authRepo },
@@ -159,6 +163,30 @@ describe('API HTTP — autenticação, autorização e erros', () => {
       const res = await request(app.getHttpServer()).get('/api/health');
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('ok');
+    });
+  });
+
+  describe('GET /api/metrics (scrape do Prometheus)', () => {
+    it('401 sem o token de métricas, mesmo sendo rota @Public', async () => {
+      expectErro(await request(app.getHttpServer()).get('/api/metrics'), 401, 'UnauthorizedException');
+    });
+
+    it('401 com JWT de usuário no lugar do token de métricas', async () => {
+      const res = await request(app.getHttpServer()).get('/api/metrics').set(bearer(tokenDe('ADMIN')));
+      expectErro(res, 401, 'UnauthorizedException');
+    });
+
+    it('200 com o token certo, no formato texto do Prometheus', async () => {
+      const res = await request(app.getHttpServer()).get('/api/metrics').set(bearer(METRICS_TOKEN));
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/plain');
+      expect(res.text).toContain('# TYPE http_requests_total counter');
+      expect(res.text).toContain('# TYPE security_events_total counter');
+    });
+
+    it('404 quando METRICS_TOKEN não está configurado', async () => {
+      const semToken = new MetricsController(new MetricsService(), { get: () => undefined } as never);
+      await expect(semToken.scrape(undefined, {} as never)).rejects.toThrow(NotFoundException);
     });
   });
 

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service.js';
+import { MetricsService } from '../metrics/metrics.service.js';
 
 export type SecurityEventType =
   | 'login_failed'
@@ -26,7 +27,10 @@ export class SecurityEventLogger {
   private readonly logger = new Logger('SecurityEvent');
   private readonly failedLogins = new Map<string, number[]>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metrics: MetricsService,
+  ) {}
 
   async log(event: SecurityEvent): Promise<void> {
     const entry = {
@@ -38,6 +42,8 @@ export class SecurityEventLogger {
       timestamp: new Date().toISOString(),
       details: event.details,
     };
+
+    this.metrics.securityEvents.inc({ type: event.type });
 
     if (event.type === 'login_failed' || event.type === 'access_denied') {
       this.logger.warn(JSON.stringify(entry));
@@ -78,6 +84,7 @@ export class SecurityEventLogger {
     this.failedLogins.set(key, attempts);
 
     if (attempts.length >= FAILED_LOGIN_THRESHOLD) {
+      this.metrics.securityEvents.inc({ type: 'brute_force_suspected' });
       this.logger.error(
         JSON.stringify({
           event: 'security_alert',
