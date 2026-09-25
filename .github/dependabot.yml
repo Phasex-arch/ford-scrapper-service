@@ -1,0 +1,34 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Espera a versão nova ter alguns dias de vida antes de propor: pacote
+    # comprometido costuma ser detectado e despublicado nesse intervalo.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    groups:
+      nestjs:
+        patterns: ['@nestjs/*']
+      prisma:
+        patterns: ['prisma', '@prisma/*']
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    # Espera a versão nova ter alguns dias de vida antes de propor: pacote
+    # comprometido costuma ser detectado e despublicado nesse intervalo.
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Espera a versão nova ter alguns dias de vida antes de propor: pacote
+    # comprometido costuma ser detectado e despublicado nesse intervalo.
+    cooldown:
+      default-days: 7

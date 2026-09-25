@@ -7,6 +7,9 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
+    # Deploy só pelo job 'deploy' do .github/workflows/devsecops.yml, depois
+    # de SAST/SCA/secrets/Trivy passarem — nunca direto do push.
+    autoDeploy: false
     envVars:
       - key: NODE_ENV
         value: production
