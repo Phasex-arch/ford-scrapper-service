@@ -1,0 +1,37 @@
+# Round-trip do backup cifrado (scripts/backup-db.sh + restore-db.sh).
+# Container simulado por um CLI falso (pg_dump devolve uma linha fixa de Cliente); gerado em 2026-09-25.
+
+## 1. Backup sem passphrase é recusado
+Erro: defina BACKUP_PASSPHRASE — o backup não é gravado em claro.
+exit=1
+
+## 2. Backup com passphrase
+Gerando dump de ford-postgres em <tmp>/out/ford_20260925_114230.sql.gz.gpg ...
+Backup concluído: <tmp>/out/ford_20260925_114230.sql.gz.gpg (4.0K)
+Removendo backups com mais de 14 dias...
+Backups atuais em <tmp>/out:
+-rw------- 1 ricardo ricardo 158 Sep 25 11:42 ford_20260925_114230.sql.gz.gpg
+
+## 3. O arquivo gerado não é legível
+tipo: PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .
+permissão: -rw-------
+OK: e-mail do cliente não aparece no arquivo
+
+## 4. Restore com senha errada aborta sem tocar no banco
+gpg: decryption failed: Bad session key
+
+gzip: stdin: unexpected end of file
+Erro: não foi possível decifrar <tmp>/out/ford_20260925_114230.sql.gz.gpg (senha errada ou arquivo corrompido). Banco intocado.
+exit=1
+OK: nenhum dado enviado ao psql
+
+## 5. Restore com senha certa
+ATENÇÃO: isso vai APAGAR todos os dados atuais de 'postgres' em ford-postgres
+e restaurar a partir de: <tmp>/out/ford_20260925_114230.sql.gz.gpg
+Recriando schema public...
+DROP SCHEMA
+Restaurando <tmp>/out/ford_20260925_114230.sql.gz.gpg ...
+Restauração concluída. Reinicie o backend para reconectar limpo:
+  <tmp>/fakecli compose restart backend
+conteúdo recebido pelo psql:
+INSERT INTO "Cliente" VALUES ('Joao', '(11) 91234-5678', 'joao@email.com');
