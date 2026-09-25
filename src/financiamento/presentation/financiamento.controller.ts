@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import {
   FinanciamentoStatus,
   Role,
@@ -35,6 +36,7 @@ import { UpdateFinanciamentoDto } from '../application/dto/update-financiamento.
 import { ListFinanciamentosQueryDto } from '../application/dto/list-financiamentos-query.dto.js';
 
 @ApiTags('Financiamentos')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('financiamentos')
 @UseGuards(RolesGuard)

@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import {
   OrdemServicoPrioridade,
   OrdemServicoStatus,
@@ -36,6 +37,7 @@ import { UpdateServicoDto } from '../application/dto/update-servico.dto.js';
 import { ListServicosQueryDto } from '../application/dto/list-servicos-query.dto.js';
 
 @ApiTags('Serviços')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('servicos')
 @UseGuards(RolesGuard)

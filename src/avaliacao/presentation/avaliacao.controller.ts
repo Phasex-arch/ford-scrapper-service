@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { Throttle } from '@nestjs/throttler';
 import { Role } from '../../../generated/prisma/enums.js';
 import { Public } from '../../auth/infrastructure/decorators/public.decorator.js';
@@ -34,6 +35,7 @@ import { UpdateAvaliacaoDto } from '../application/dto/update-avaliacao.dto.js';
 import { ListAvaliacoesQueryDto } from '../application/dto/list-avaliacoes-query.dto.js';
 
 @ApiTags('Avaliações')
+@ApiStandardErrors()
 @Controller('avaliacoes')
 @UseInterceptors(AuditInterceptor)
 export class AvaliacaoController {

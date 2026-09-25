@@ -12,6 +12,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
@@ -23,6 +24,7 @@ import {
 const PERIODS: DashPeriod[] = ['hoje', 'semana', 'mes', 'trimestre', 'ano'];
 
 @ApiTags('Dashboard')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('dashboard')
 @UseGuards(RolesGuard)

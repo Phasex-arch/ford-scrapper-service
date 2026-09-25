@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import {
   CondicaoVeiculo,
   Role,
@@ -37,6 +38,7 @@ import { ListEstoqueQueryDto } from '../application/dto/list-estoque-query.dto.j
 import { ReservarEstoqueDto } from '../application/dto/reservar-estoque.dto.js';
 
 @ApiTags('Estoque')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('estoque')
 @UseGuards(RolesGuard)

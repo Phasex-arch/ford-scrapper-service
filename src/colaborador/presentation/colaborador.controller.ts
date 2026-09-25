@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { Role } from '../../../generated/prisma/enums.js';
 import { CurrentUser } from '../../auth/infrastructure/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
@@ -39,6 +40,7 @@ import {
 } from '../application/dto/colaborador-response.dto.js';
 
 @ApiTags('Colaboradores')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('colaboradores')
 @UseGuards(RolesGuard)

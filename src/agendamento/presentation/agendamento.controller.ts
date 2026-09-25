@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from '../../common/swagger/api-standard-errors.decorator.js';
 import { AgendamentoStatus, Role } from '../../../generated/prisma/enums.js';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator.js';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard.js';
@@ -32,6 +33,7 @@ import { UpdateAgendamentoDto } from '../application/dto/update-agendamento.dto.
 import { ListAgendamentosQueryDto } from '../application/dto/list-agendamentos-query.dto.js';
 
 @ApiTags('Agendamentos')
+@ApiStandardErrors()
 @ApiBearerAuth()
 @Controller('agendamentos')
 @UseGuards(RolesGuard)
