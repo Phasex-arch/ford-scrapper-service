@@ -1,6 +1,6 @@
 # Sprint 3 — Arquitetura orientada a serviços e web services
 
-Índice da entrega: onde está, neste repositório, cada critério da rubrica. Projeto **Ford One**
+Projeto **Ford One**
 (portal público + painel da concessionária + esta API REST em NestJS/PostgreSQL).
 
 ## Onde está cada critério
@@ -38,7 +38,7 @@ Usuários de teste (senha = variáveis `*_SENHA` do `.env`): `admin@ford.com.br`
 Requisições prontas (incluindo 401/403/404): [`requests.http`](../requests.http).
 Produção: https://ford-backend-pdvb.onrender.com/api/docs
 
-## O que foi ajustado nesta sprint (sem mudar regras de negócio nem contratos da API)
+## O que foi ajustado nesta sprint
 
 - **Novo** `src/http/api-http.spec.ts` — 20 testes HTTP: sucesso, erro, 401, 403, 404, 429.
 - **Swagger:** decorator `@ApiStandardErrors()` (401/403/404 + schema de erro padronizado) nos 16
