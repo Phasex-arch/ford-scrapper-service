@@ -1,0 +1,5 @@
+# Falsos positivos revisados manualmente (ver docs/CYBERSECURITY-SPRINT3.md, Atividade 1).
+# Placeholder "token=abc123def456" do badge do README template do NestJS.
+f45eab7aa062007498cd1ba8b3fe62278b4c0751:README.md:generic-api-key:5
+# JWT de exemplo de ambiente local (localhost, segredo de dev, expirado em 8h) num doc antigo.
+24ab7383deaa5e5bd4b6533cf87141cd08a98e4d:docs/CYBERSECURITY.md:curl-auth-header:627
