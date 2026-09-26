@@ -92,7 +92,7 @@ flowchart LR
   Commit --> IAC["iac<br/>Trivy config"]
   SAST -. SARIF .-> Tab["GitHub → Security"]
   CT -. SARIF .-> Tab
-  BT & SAST & SCA & SEC & CT & IAC --> Gate{"todos verdes<br/>e push em main?"}
+  BT & SAST & SCA & SEC & CT & IAC --> Gate{"todos verdes<br/>e push em dev?"}
   Gate -->|sim| Deploy["deploy<br/>Render Deploy Hook"]
   Gate -->|não| Stop["deploy bloqueado"]
 ```
@@ -105,9 +105,9 @@ flowchart LR
 | `secrets` | Gitleaks com `fetch-depth: 0` | segredo em qualquer commit do histórico | vazamento de chave, senha, token |
 | `container` | `docker build`, smoke test (usuário ≠ root, sem `npm`) e Trivy image (CRITICAL/HIGH corrigíveis) | imagem vulnerável ou rodando como root | CVE no SO/base da imagem, escalada no container |
 | `iac` | Trivy config em `Dockerfile`, `render.yaml` e compose | misconfiguração HIGH/CRITICAL | infraestrutura insegura por padrão |
-| `deploy` | `needs:` todos os jobs acima, só em push para `main`; `curl` no deploy hook do Render | — | código não verificado chegar à produção |
+| `deploy` | `needs:` todos os jobs acima, só em push para `dev` (o branch de produção); `curl` no deploy hook do Render | — | código não verificado chegar à produção |
 
-**Do commit ao deploy.** O [`render.yaml`](../render.yaml) está com `autoDeploy: false`, então o Render não publica sozinho a cada push. O único caminho para produção é o job `deploy`, que só roda depois de todas as barreiras passarem.
+**Do commit ao deploy.** O [`render.yaml`](../render.yaml) está com `autoDeploy: false` e o Auto-Deploy do serviço está desligado no painel do Render, então o Render não publica sozinho a cada push. O único caminho para produção é o job `deploy`, que só roda depois de todas as barreiras passarem. O branch de produção é o `dev`: o repositório não usa `main`.
 
 ### 1.2 Endurecimento do próprio pipeline
 

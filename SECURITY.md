@@ -4,8 +4,7 @@
 
 | Versão | Suporte |
 | --- | --- |
-| branch `main` (produção no Render) | ✅ correções de segurança |
-| branch `dev` | ✅ corrigido antes de ir para `main` |
+| branch `dev` (produção no Render) | ✅ correções de segurança |
 | outros branches e forks | ❌ |
 
 ## Como reportar uma vulnerabilidade
