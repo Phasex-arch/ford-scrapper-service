@@ -29,7 +29,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(security_events_total{type=\"login_failed\"}[1h])) or vector(0)",
+          "expr": "round(sum(increase(security_events_total{type=\"login_failed\"}[1h]))) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "datasource": {
@@ -73,7 +73,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(security_events_total{type=\"brute_force_suspected\"}[1h])) or vector(0)",
+          "expr": "round(sum(increase(security_events_total{type=\"brute_force_suspected\"}[1h]))) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "datasource": {
@@ -117,7 +117,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(http_requests_total{status=\"403\"}[1h])) or vector(0)",
+          "expr": "round(sum(increase(http_requests_total{status=\"403\"}[1h]))) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "datasource": {
@@ -161,7 +161,7 @@
       },
       "targets": [
         {
-          "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
+          "expr": "round(count(ALERTS{alertstate=\"firing\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "datasource": {
@@ -333,7 +333,7 @@
       },
       "targets": [
         {
-          "expr": "{service=\"ford-api\", context=\"SecurityEvent\"}",
+          "expr": "{service=\"ford-api\", context=\"SecurityEvent\"} | json | line_format \"{{.msg}}\"",
           "queryType": "range",
           "refId": "A",
           "datasource": {
@@ -364,7 +364,7 @@
       },
       "targets": [
         {
-          "expr": "{service=\"ford-api\", context=\"HTTP\"} |~ `\"method\":\"(POST|PUT|PATCH|DELETE)\"`",
+          "expr": "{service=\"ford-api\", context=\"HTTP\"} | json | method=~\"POST|PUT|PATCH|DELETE\" | line_format \"{{.method}} {{.path}} → {{.status}}  ip={{.ip}}  requestId={{.requestId}}  {{.durationMs}}ms\"",
           "queryType": "range",
           "refId": "A",
           "datasource": {
@@ -395,7 +395,7 @@
       },
       "targets": [
         {
-          "expr": "{service=\"ford-api\", level=~\"50|60\"}",
+          "expr": "{service=\"ford-api\", level=~\"50|60\"} | json | line_format \"[{{.context}}] {{.msg}}\"",
           "queryType": "range",
           "refId": "A",
           "datasource": {
