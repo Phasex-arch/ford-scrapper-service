@@ -126,8 +126,11 @@ flowchart LR
 | [`gitleaks.txt`](evidencias/sprint3-cyber/gitleaks.txt) | `no leaks found` no histórico completo |
 | [`trivy-config.txt`](evidencias/sprint3-cyber/trivy-config.txt) | Dockerfile antes: 2 falhas (HIGH DS-0002 root, LOW DS-0026 sem healthcheck). Depois: 0 |
 | Execução no GitHub Actions | run `36149111929`, todos os jobs verdes |
-| `github-actions.png` *(print a anexar)* | Aba Actions com o pipeline verde |
-| `github-security.png` *(print a anexar)* | Aba Security com os SARIF do Semgrep e do Trivy |
+| [`github-actions.png`](evidencias/sprint3-cyber/github-actions.png) | Workflow DevSecOps verde, incluindo os PRs abertos pelo Dependabot, que passam pelas mesmas barreiras |
+| [`github-security.png`](evidencias/sprint3-cyber/github-security.png) | Aba Security: Dependabot alerts, code scanning (SARIF do Semgrep e do Trivy) e secret scanning ativos |
+| [`github-dependabot.png`](evidencias/sprint3-cyber/github-dependabot.png) | Dependabot rodando nos 3 ecossistemas (npm, Docker, Actions) |
+
+![Pipeline DevSecOps verde no GitHub Actions](evidencias/sprint3-cyber/github-actions.png)
 
 Correção do SCA: `npm audit fix` sem `--force`, alinhamento de todos os `@nestjs/*` em 11.2.6 e `overrides` no `package.json` para as dependências transitivas que o pacote pai ainda não havia corrigido.
 
@@ -474,4 +477,6 @@ O Ford One não tem aplicativo móvel: o portal é web responsivo. Se um app for
 | 20 | Validação de schema e timeout na resposta do Gemini (API10) | ⬜ planejado |
 | 21 | Alertas enviados para fora do Grafana (Alertmanager → e-mail/Slack) | ⬜ planejado |
 
-**Configuração pendente em produção (Render):** `DATA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_PEPPER`, `METRICS_TOKEN` e o secret `RENDER_DEPLOY_HOOK` no GitHub; secret scanning e Dependabot alerts ativados nas settings do repositório.
+**Já ativo no GitHub:** secret scanning, Dependabot alerts e code scanning (ver `github-security.png`).
+
+**Configuração pendente em produção:** `DATA_ENCRYPTION_KEY` e `DATA_ENCRYPTION_PEPPER` no Render (obrigatórias); `METRICS_TOKEN` (opcional: vazio desliga o `/api/metrics`); secret `RENDER_DEPLOY_HOOK` no GitHub.
