@@ -1,8 +1,8 @@
 # Stack local de observabilidade da API (Sprint 3 — Cyber, atividade 3).
 #   cd observability && cp .env.example .env   # preencher os segredos
 #   docker compose up -d --build
-#   # a imagem não tem npx: o seed roda do host, contra a porta 5433
-#   (cd .. && DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
+#   # a imagem não tem npx: o seed roda do host, contra a porta 5434
+#   (cd .. && DATABASE_URL=postgresql://postgres:postgres@localhost:5434/postgres \
 #     ADMIN_SENHA=... GERENTE_SENHA=... FUNCIONARIO_SENHA=... npx prisma db seed)
 #   ADMIN_SENHA=... ../scripts/security-traffic.sh
 #   Grafana http://localhost:3001 (admin / GRAFANA_ADMIN_PASSWORD)
@@ -21,7 +21,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
     ports:
-      - "5433:5432" # 5433 para não colidir com o compose raiz
+      - "5434:5432" # 5434 para não colidir com o compose raiz
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -41,6 +41,8 @@ services:
       DATA_ENCRYPTION_PEPPER: ${DATA_ENCRYPTION_PEPPER:?defina no observability/.env}
       METRICS_TOKEN: ${METRICS_TOKEN:?defina no observability/.env}
       CORS_ORIGINS: http://localhost:8080
+      # Exigida no boot; o scraper/Gemini não faz parte desta demo.
+      GEMINI_KEY: ${GEMINI_KEY:-nao-configurada}
     ports:
       - "3000:3000"
     depends_on:

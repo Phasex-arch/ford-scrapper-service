@@ -1,5 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { Counter, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
+import type { SecurityEventType } from '../security/security-event.logger.js';
+
+// Séries nascem em 0: sem uma amostra anterior, o increase() do Prometheus
+// ignora o primeiro evento e o alerta de brute force nunca dispara.
+const SECURITY_EVENT_TYPES: (SecurityEventType | 'brute_force_suspected')[] = [
+  'login_failed',
+  'login_success',
+  'invalid_token',
+  'expired_token',
+  'access_denied',
+  'suspicious_activity',
+  'brute_force_suspected',
+];
 
 /**
  * Métricas no formato Prometheus, expostas em GET /api/metrics e lidas pelo
@@ -35,5 +48,6 @@ export class MetricsService {
 
   constructor() {
     collectDefaultMetrics({ register: this.registry });
+    for (const type of SECURITY_EVENT_TYPES) this.securityEvents.inc({ type }, 0);
   }
 }

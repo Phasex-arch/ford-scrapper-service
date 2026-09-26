@@ -182,6 +182,8 @@ describe('API HTTP — autenticação, autorização e erros', () => {
       expect(res.headers['content-type']).toContain('text/plain');
       expect(res.text).toContain('# TYPE http_requests_total counter');
       expect(res.text).toContain('# TYPE security_events_total counter');
+      // série já existe em 0, senão o increase() do alerta perde o 1º evento
+      expect(res.text).toContain('security_events_total{type="brute_force_suspected"} 0');
     });
 
     it('404 quando METRICS_TOKEN não está configurado', async () => {
