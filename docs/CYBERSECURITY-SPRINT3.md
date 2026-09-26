@@ -126,11 +126,14 @@ flowchart LR
 | [`gitleaks.txt`](evidencias/sprint3-cyber/gitleaks.txt) | `no leaks found` no histórico completo |
 | [`trivy-config.txt`](evidencias/sprint3-cyber/trivy-config.txt) | Dockerfile antes: 2 falhas (HIGH DS-0002 root, LOW DS-0026 sem healthcheck). Depois: 0 |
 | Execução no GitHub Actions | run `36149111929`, todos os jobs verdes |
+| [`github-deploy-gate.png`](evidencias/sprint3-cyber/github-deploy-gate.png) | Run `36267264898` (merge do PR #25 na `dev`): as 6 barreiras verdes e só então o job `Deploy (Render)`. O Render criou um único deploy do commit `fd80753` às 19:48:49 UTC, 6 s depois do hook, e nenhum no momento do merge: o Auto-Deploy está desligado e o pipeline é o único caminho para produção |
 | [`github-actions.png`](evidencias/sprint3-cyber/github-actions.png) | Workflow DevSecOps verde, incluindo os PRs abertos pelo Dependabot, que passam pelas mesmas barreiras |
 | [`github-security.png`](evidencias/sprint3-cyber/github-security.png) | Aba Security: Dependabot alerts, code scanning (SARIF do Semgrep e do Trivy) e secret scanning ativos |
 | [`github-dependabot.png`](evidencias/sprint3-cyber/github-dependabot.png) | Dependabot rodando nos 3 ecossistemas (npm, Docker, Actions) |
 
 ![Pipeline DevSecOps verde no GitHub Actions](evidencias/sprint3-cyber/github-actions.png)
+
+![Deploy só depois das 6 barreiras](evidencias/sprint3-cyber/github-deploy-gate.png)
 
 Correção do SCA: `npm audit fix` sem `--force`, alinhamento de todos os `@nestjs/*` em 11.2.6 e `overrides` no `package.json` para as dependências transitivas que o pacote pai ainda não havia corrigido.
 
