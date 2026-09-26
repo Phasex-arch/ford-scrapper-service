@@ -1,0 +1,101 @@
+# Stack local de observabilidade da API (Sprint 3 — Cyber, atividade 3).
+#   cd observability && cp .env.example .env   # preencher os segredos
+#   docker compose up -d --build
+#   # a imagem não tem npx: o seed roda do host, contra a porta 5433
+#   (cd .. && DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
+#     ADMIN_SENHA=... GERENTE_SENHA=... FUNCIONARIO_SENHA=... npx prisma db seed)
+#   ADMIN_SENHA=... ../scripts/security-traffic.sh
+#   Grafana http://localhost:3001 (admin / GRAFANA_ADMIN_PASSWORD)
+#   Prometheus http://localhost:9090   API http://localhost:3000/api
+#
+# Logs:     API (stdout NDJSON do pino) → Alloy (docker.sock) → Loki → Grafana
+# Métricas: Prometheus → GET /api/metrics (Bearer METRICS_TOKEN) → Grafana
+# Alertas:  prometheus/alerts.yml (aparecem no Grafana em Alerting e no painel)
+name: ford-observability
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432" # 5433 para não colidir com o compose raiz
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      retries: 10
+
+  api:
+    container_name: ford-obs-api # o Alloy filtra os logs por este nome
+    build: ..
+    environment:
+      NODE_ENV: production # pino em NDJSON puro (sem pino-pretty)
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      JWT_SECRET: ${JWT_SECRET:?defina no observability/.env}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?defina no observability/.env}
+      DATA_ENCRYPTION_PEPPER: ${DATA_ENCRYPTION_PEPPER:?defina no observability/.env}
+      METRICS_TOKEN: ${METRICS_TOKEN:?defina no observability/.env}
+      CORS_ORIGINS: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  loki:
+    image: grafana/loki:3.5.0
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+
+  # Alloy substitui o Promtail (fim de suporte em mar/2026).
+  alloy:
+    image: grafana/alloy:v1.9.1
+    command: run /etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    configs:
+      - source: metrics_token
+        target: /etc/prometheus/metrics_token
+    ports:
+      - "9090:9090"
+    depends_on: [api]
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?defina no observability/.env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on: [prometheus, loki]
+
+# O token chega ao Prometheus como arquivo, gerado da mesma env da API —
+# uma fonte só, nada de segredo commitado.
+configs:
+  metrics_token:
+    content: ${METRICS_TOKEN}
+
+volumes:
+  pg_data:
+  loki_data:

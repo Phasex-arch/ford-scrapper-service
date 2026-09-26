@@ -1,0 +1,42 @@
+// Lê o stdout do container da API (NDJSON do pino) e envia ao Loki.
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "api" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/ford-obs-api"
+    action        = "keep"
+  }
+  rule {
+    target_label = "service"
+    replacement  = "ford-api"
+  }
+}
+
+loki.source.docker "api" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.api.output
+  forward_to = [loki.process.pino.receiver]
+}
+
+// "context" (HTTP, SecurityEvent, AuditInterceptor...) vira label: baixa
+// cardinalidade e é o filtro principal dos painéis.
+loki.process "pino" {
+  stage.json {
+    expressions = { context = "context", level = "level" }
+  }
+  stage.labels {
+    values = { context = "", level = "" }
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

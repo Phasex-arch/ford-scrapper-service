@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: ford
+    folder: Ford One
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
