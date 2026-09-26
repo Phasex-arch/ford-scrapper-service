@@ -83,7 +83,9 @@ export class AesGcmService implements OnModuleInit {
     const iv = raw.subarray(0, IV_LENGTH);
     const authTag = raw.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
     const ciphertext = raw.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
-    const decipher = createDecipheriv(ALGORITHM, key, iv);
+    const decipher = createDecipheriv(ALGORITHM, key, iv, {
+      authTagLength: AUTH_TAG_LENGTH,
+    });
     decipher.setAuthTag(authTag);
     const dec = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     return dec.toString('utf8');

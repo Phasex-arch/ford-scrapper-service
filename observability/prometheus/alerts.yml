@@ -1,0 +1,31 @@
+groups:
+  - name: ford-api-security
+    rules:
+      - alert: BruteForceSuspected
+        expr: increase(security_events_total{type="brute_force_suspected"}[5m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: "Suspeita de brute force no login"
+          description: "5+ logins falhos para o mesmo e-mail/IP em 5 min. Playbook: docs/CYBERSECURITY-SPRINT3.md (brute force)."
+
+      - alert: Unauthorized401Spike
+        expr: sum(increase(http_requests_total{status="401"}[5m])) > 20
+        labels: { severity: warning }
+        annotations:
+          summary: "Pico de 401 (tokens inválidos/expirados ou credenciais erradas)"
+
+      - alert: HighServerErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_requests_total[5m])), 1e-9) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Mais de 5% das requisições com 5xx"
+
+      - alert: ApiScrapeDown
+        expr: up{job="ford-api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Prometheus não consegue coletar /api/metrics (API fora ou token errado)"

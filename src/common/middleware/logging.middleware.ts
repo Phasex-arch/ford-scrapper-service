@@ -1,12 +1,15 @@
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
+import { MetricsService } from '../metrics/metrics.service.js';
 
 const SENSITIVE_PATHS = ['/auth/login', '/colaboradores'];
 
 @Injectable()
 export class LoggingMiddleware implements NestMiddleware {
   private readonly logger = new Logger('HTTP');
+
+  constructor(private readonly metrics: MetricsService) {}
 
   use(req: Request, res: Response, next: NextFunction): void {
     const requestId =
@@ -39,6 +42,16 @@ export class LoggingMiddleware implements NestMiddleware {
       // Passa o objeto direto (não mais JSON.stringify) — agora que o
       // Logger do app é o pino (nestjs-pino), isso vira NDJSON estruturado
       // de verdade em vez de uma string JSON dentro de outra linha de log.
+      // Rota como padrão ("/api/clientes/:id"), não a URL real — uma série
+      // por id estouraria a cardinalidade do Prometheus.
+      const labels = {
+        method,
+        route: (req.route as { path?: string } | undefined)?.path ?? 'unmatched',
+        status: String(res.statusCode),
+      };
+      this.metrics.httpRequests.inc(labels);
+      this.metrics.httpDuration.observe(labels, elapsedMs / 1000);
+
       if (res.statusCode >= 500) {
         this.logger.error(entry);
       } else if (res.statusCode >= 400) {

@@ -1,0 +1,70 @@
+# Stack de observabilidade (observability/docker-compose.yml) rodando localmente.
+# Gerado em 2026-09-26 com Docker 29.6.1; tráfego de scripts/security-traffic.sh (rodado 2x).
+
+## 1. Saída do scripts/security-traffic.sh
+== Fase 1: brute force em admin@ford.com.br
+  tentativa 1 → 401
+  tentativa 2 → 401
+  tentativa 3 → 401
+  tentativa 4 → 401
+  tentativa 5 → 401
+  tentativa 6 → 429
+== Aguardando 61s a janela do throttle do login...
+== Fase 2: tráfego legítimo e negado
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (admin) → 200
+  GET /clientes (token inválido) → 401
+  GET /clientes (token inválido) → 401
+  GET /clientes (token inválido) → 401
+  GET /clientes (token inválido) → 401
+  GET /clientes (token inválido) → 401
+  GET /audit-log (FUNCIONARIO) → 403
+  GET /audit-log (FUNCIONARIO) → 403
+  GET /audit-log (FUNCIONARIO) → 403
+== Pronto. Veja o Grafana (dashboard 'Ford One — Segurança da API') e
+   http://localhost:9090/alerts (BruteForceSuspected deve estar firing).
+
+## 2. Alvo do Prometheus (up)
+  {} 1
+
+## 3. security_events_total
+  {'type': 'login_failed'} 5
+  {'type': 'brute_force_suspected'} 1
+  {'type': 'login_success'} 2
+  {'type': 'invalid_token'} 5
+  {'type': 'access_denied'} 3
+  {'type': 'expired_token'} 0
+  {'type': 'suspicious_activity'} 0
+
+## 4. http_requests_total por rota e status (não-200)
+  {'route': '/api/auth/login', 'status': '401'} 5
+  {'route': '/api/auth/login', 'status': '429'} 1
+  {'route': '/api/clientes', 'status': '401'} 5
+  {'route': '/api/audit-log', 'status': '403'} 3
+
+## 5. Regras de alerta carregadas
+  BruteForceSuspected ok firing
+  Unauthorized401Spike ok inactive
+  HighServerErrorRate ok inactive
+  ApiScrapeDown ok inactive
+
+## 6. Alertas ativos
+  BruteForceSuspected firing desde 2026-09-26T17:57:01.51751339Z
+
+## 7. Loki: eventos de segurança ({service="ford-api", context="SecurityEvent"}), 5 mais recentes
+  {"event":"security_event","type":"access_denied","userEmail":"patricia.oliveira@ford.com.br","userId":"49bec6fa-c924-43d9-a1ad-c682016dec98","ip":"::ffff:172.22.0.1","timestamp":"2026-09-26T17:57:41.823Z","details":{"pat
+  {"event":"security_event","type":"access_denied","userEmail":"patricia.oliveira@ford.com.br","userId":"49bec6fa-c924-43d9-a1ad-c682016dec98","ip":"::ffff:172.22.0.1","timestamp":"2026-09-26T17:57:41.811Z","details":{"pat
+  {"event":"security_event","type":"access_denied","userEmail":"patricia.oliveira@ford.com.br","userId":"49bec6fa-c924-43d9-a1ad-c682016dec98","ip":"::ffff:172.22.0.1","timestamp":"2026-09-26T17:57:41.798Z","details":{"pat
+  {"event":"security_event","type":"login_success","userEmail":"patricia.oliveira@ford.com.br","userId":"49bec6fa-c924-43d9-a1ad-c682016dec98","ip":"::ffff:172.22.0.1","timestamp":"2026-09-26T17:57:41.777Z"}
+  {"event":"security_event","type":"invalid_token","ip":"::ffff:172.22.0.1","timestamp":"2026-09-26T17:57:41.736Z","details":{"path":"/api/clientes","reason":"invalid token"}}
+
+## 8. Header Authorization no log (redact do pino)
+  authorization = [REDACTED]

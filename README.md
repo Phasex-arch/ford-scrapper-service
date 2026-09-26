@@ -162,6 +162,7 @@ Detalhes: [`docs/AUTENTICACAO-JWT.md`](./docs/AUTENTICACAO-JWT.md). Índice comp
 | REST nível 2: matriz endpoint × perfil × status | [`docs/REST.md`](./docs/REST.md) |
 | Testes automatizados e evidências | [`docs/TESTES.md`](./docs/TESTES.md) · [`docs/evidencias/`](./docs/evidencias) |
 | Swagger/OpenAPI e formato padrão de erro | [`docs/ERROS-E-SWAGGER.md`](./docs/ERROS-E-SWAGGER.md) |
+| **Cybersecurity Sprint 3: DevSecOps, observabilidade, compliance (STRIDE, ASVS, API Top 10, LGPD)** | [`docs/CYBERSECURITY-SPRINT3.md`](./docs/CYBERSECURITY-SPRINT3.md) · stack local em [`observability/`](./observability) |
 | Segurança, contratos com o frontend, operação | [`docs/CYBERSECURITY.md`](./docs/CYBERSECURITY.md) · [`INTEGRATION-CONTRACTS.md`](./docs/INTEGRATION-CONTRACTS.md) · [`OPERACAO.md`](./docs/OPERACAO.md) |
 
 ## 📡 Endpoints Principais

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service.js';
 import type { Role } from '../../../../generated/prisma/enums.js';
+import { AesGcmService } from '../../../common/crypto/aes-gcm.service.js';
+import { HashService } from '../../../common/crypto/hash.service.js';
 
 export interface ColaboradorListFilter {
   ativo?: boolean;
@@ -10,26 +12,37 @@ export interface ColaboradorListFilter {
   limit: number;
 }
 
+/**
+ * O CPF fica cifrado no banco (AES-256-GCM) e é buscado pelo blind index
+ * `cpfHash`. Toda leitura que sai deste repositório já vem com o CPF em
+ * claro — quem mascara para a resposta HTTP é o toColaboradorResponse.
+ */
 @Injectable()
 export class ColaboradorRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly aes: AesGcmService,
+    private readonly hash: HashService,
+  ) {}
 
-  findAll(filter: ColaboradorListFilter) {
+  async findAll(filter: ColaboradorListFilter) {
     const where = this.buildWhere(filter);
-    return this.prisma.colaborador.findMany({
+    const rows = await this.prisma.colaborador.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       skip: (filter.page - 1) * filter.limit,
       take: filter.limit,
     });
+    return rows.map((c) => this.decryptCpf(c));
   }
 
   count(filter: ColaboradorListFilter): Promise<number> {
     return this.prisma.colaborador.count({ where: this.buildWhere(filter) });
   }
 
-  findById(id: string) {
-    return this.prisma.colaborador.findUnique({ where: { id } });
+  async findById(id: string) {
+    const c = await this.prisma.colaborador.findUnique({ where: { id } });
+    return c && this.decryptCpf(c);
   }
 
   findByEmail(email: string) {
@@ -39,14 +52,16 @@ export class ColaboradorRepository {
   }
 
   findByCpf(cpf: string) {
-    return this.prisma.colaborador.findUnique({ where: { cpf } });
+    return this.prisma.colaborador.findUnique({
+      where: { cpfHash: this.hash.lookupHash(cpf) },
+    });
   }
 
   findByRegistro(registro: string) {
     return this.prisma.colaborador.findUnique({ where: { registro } });
   }
 
-  create(data: {
+  async create(data: {
     nome: string;
     cpf: string;
     telefone: string;
@@ -58,10 +73,11 @@ export class ColaboradorRepository {
     senhaHash: string;
     ativo?: boolean;
   }) {
-    return this.prisma.colaborador.create({
+    const c = await this.prisma.colaborador.create({
       data: {
         nome: data.nome,
-        cpf: data.cpf,
+        cpf: this.aes.encrypt(data.cpf),
+        cpfHash: this.hash.lookupHash(data.cpf),
         telefone: data.telefone,
         email: data.email.toLowerCase(),
         endereco: data.endereco,
@@ -72,9 +88,10 @@ export class ColaboradorRepository {
         senha: data.senhaHash,
       },
     });
+    return this.decryptCpf(c);
   }
 
-  update(
+  async update(
     id: string,
     data: Partial<{
       nome: string;
@@ -87,20 +104,27 @@ export class ColaboradorRepository {
       senha: string;
     }>,
   ) {
-    return this.prisma.colaborador.update({
+    const c = await this.prisma.colaborador.update({
       where: { id },
       data: {
         ...data,
         email: data.email?.toLowerCase(),
       },
     });
+    return this.decryptCpf(c);
   }
 
-  softDelete(id: string) {
-    return this.prisma.colaborador.update({
+  async softDelete(id: string) {
+    const c = await this.prisma.colaborador.update({
       where: { id },
       data: { ativo: false },
     });
+    return this.decryptCpf(c);
+  }
+
+  /** Linhas com cpfHash nulo ainda não foram cifradas (ver ColaboradorCpfBackfill). */
+  private decryptCpf<T extends { cpf: string; cpfHash: string | null }>(c: T): T {
+    return c.cpfHash ? { ...c, cpf: this.aes.decrypt(c.cpf) } : c;
   }
 
   private buildWhere(filter: ColaboradorListFilter) {

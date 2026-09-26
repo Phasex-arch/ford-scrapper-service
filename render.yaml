@@ -7,6 +7,9 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
+    # Deploy só pelo job 'deploy' do .github/workflows/devsecops.yml, depois
+    # de SAST/SCA/secrets/Trivy passarem — nunca direto do push.
+    autoDeploy: false
     envVars:
       - key: NODE_ENV
         value: production
@@ -53,4 +56,6 @@ services:
       - key: DATA_ENCRYPTION_KEY # openssl rand -base64 32
         sync: false
       - key: DATA_ENCRYPTION_PEPPER # openssl rand -hex 32
+        sync: false
+      - key: METRICS_TOKEN # openssl rand -hex 32 — vazio desliga o /api/metrics
         sync: false

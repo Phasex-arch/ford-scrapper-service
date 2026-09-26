@@ -103,7 +103,12 @@ enum Role {
 model Colaborador {
   id                        String          @id @default(uuid())
   nome                      String
-  cpf                       String          @unique
+  /// AES-256-GCM (AesGcmService). Buscas usam cpfHash, nunca este campo.
+  cpf                       String
+  /// HMAC-SHA256 com pepper (HashService.lookupHash) — blind index que
+  /// mantém unicidade e busca por CPF sem decifrar. Nulo = linha ainda não
+  /// cifrada (seed); o backfill no boot preenche.
+  cpfHash                   String?         @unique
   telefone                  String
   email                     String          @unique
   endereco                  String

@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ColaboradorService } from './application/colaborador.service.js';
 import { ColaboradorRepository } from './infrastructure/repositories/colaborador.repository.js';
+import { ColaboradorCpfBackfill } from './infrastructure/colaborador-cpf.backfill.js';
 import { ColaboradorController } from './presentation/colaborador.controller.js';
 
 @Module({
   controllers: [ColaboradorController],
-  providers: [ColaboradorService, ColaboradorRepository],
+  providers: [ColaboradorService, ColaboradorRepository, ColaboradorCpfBackfill],
   exports: [ColaboradorService, ColaboradorRepository],
 })
 export class ColaboradorModule {}

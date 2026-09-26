@@ -1,5 +1,7 @@
 # Trabalho de Cybersecurity — Ford Dealership Service
 
+> **Documento da Sprint 2, mantido como histórico.** A entrega atual (Sprint 3: pipeline DevSecOps, CPF cifrado, backup cifrado, observabilidade, STRIDE/ASVS/LGPD) está em [`CYBERSECURITY-SPRINT3.md`](CYBERSECURITY-SPRINT3.md).
+
 > **Disciplina:** Cybersecurity  
 > **Sprint:** Sprint — 1º Semestre 2026  
 > **Entrega:** 24/05/2026 (via Microsoft Teams)  

@@ -72,6 +72,19 @@ async function bootstrap() {
     );
   }
 
+  // CPF de colaborador é cifrado em repouso (ColaboradorRepository); sem
+  // chave/pepper a API não consegue gravar nem buscar CPF, então produção
+  // não sobe sem elas.
+  if (
+    isProd &&
+    (!process.env.DATA_ENCRYPTION_KEY || !process.env.DATA_ENCRYPTION_PEPPER)
+  ) {
+    throw new Error(
+      'DATA_ENCRYPTION_KEY e DATA_ENCRYPTION_PEPPER são obrigatórias em produção ' +
+        '(openssl rand -base64 32 / openssl rand -hex 32).',
+    );
+  }
+
   app.enableCors({
     origin: isWildcardOnly ? true : rawOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
