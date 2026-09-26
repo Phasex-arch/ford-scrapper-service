@@ -1,6 +1,6 @@
 # Tag fixa (não `node:22-alpine`): build reprodutível e o Dependabot abre PR
 # quando sair versão nova da imagem base, em vez de ela mudar por baixo.
-FROM node:22.23.3-alpine3.24 AS build
+FROM node:26.9.0-alpine3.24 AS build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY src ./src
 RUN npx prisma generate
 RUN npm run build
 
-FROM node:22.23.3-alpine3.24 AS runtime
+FROM node:26.9.0-alpine3.24 AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
