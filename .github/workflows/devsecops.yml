@@ -134,7 +134,8 @@ jobs:
   deploy:
     name: Deploy (Render)
     needs: [build-test, sast, sca, secrets, container, iac]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # dev é o branch de produção (o Render publica dele; não existe main).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     environment: production
     steps:
