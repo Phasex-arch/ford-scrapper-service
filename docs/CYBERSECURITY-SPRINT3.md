@@ -60,7 +60,7 @@ flowchart LR
 | Banco (Postgres) e backups | **No escopo** | Ativo de maior impacto (dados pessoais de clientes e CPF de colaboradores). |
 | Pipeline CI/CD e infraestrutura (Docker, Render) | **No escopo** | É por onde o código chega à produção. |
 | App mobile | **Não se aplica** | O produto não tem app. A seção [4.4](#44-owasp-mobile-top-10-2024--não-se-aplica) lista os controles previstos se um for criado. |
-| IoT / MQTT | **Não se aplica** | Não há dispositivo conectado. A seção [2.6](#26-mqtt--tls-design-não-implementado) traz o desenho de segurança caso a oficina passe a integrar telemetria de veículos. |
+| IoT / MQTT | **Não se aplica** | Não há dispositivo conectado. A seção [2.6](#26-mqtt--tls-requisitos-de-design) traz o desenho de segurança caso a oficina passe a integrar telemetria de veículos. |
 | Modelos de ML próprios | **Não se aplica** | O único uso de IA é a chamada ao Gemini para extrair texto de PDF. Os riscos dessa integração estão no STRIDE ([4.1](#41-stride-revisado)). |
 
 ### Linha do tempo das mudanças (branch `feat/devsecops-sprint3`, PR #11)
@@ -212,6 +212,7 @@ sequenceDiagram
 | `JwtAuthGuard` global (rota pública só com `@Public`) | `src/app.module.ts:97-98` |
 | Detecção de brute force (5 falhas por e-mail+IP em 5 min) | `src/common/security/security-event.logger.ts:22-23,86` |
 | Redação de `authorization`, `cookie` e senhas nos logs | `src/app.module.ts:48-57` |
+| Swagger desligado em produção (`SWAGGER_ENABLED=true` reabre) | `src/main.ts:155` |
 
 ### 2.5 Controle de acesso por perfil (RBAC)
 
@@ -228,7 +229,7 @@ sequenceDiagram
 
 Os testes HTTP (`src/http/api-http.spec.ts`) cobrem os casos de negação: FUNCIONARIO recebe 403 no DELETE de cliente, GERENTE recebe 403 no audit-log.
 
-### 2.6 MQTT / TLS: design (não implementado)
+### 2.6 MQTT / TLS: requisitos de design
 
 O produto não tem dispositivos IoT. Se a oficina passar a receber telemetria de veículos (OBD) via MQTT, o broker deve seguir estes requisitos:
 
@@ -355,7 +356,7 @@ flowchart LR
 | | **E** FUNCIONARIO acessar rota de ADMIN | `JwtAuthGuard` global e `RolesGuard` | testes HTTP (403) |
 | **Postgres / backup** | **I** dump ou backup vazado | CPF AES-256-GCM, senhas argon2id, backup GPG | spec do repositório + `backup-cifrado.txt` |
 | | **T** adulteração do CPF cifrado | tag de autenticação do GCM (a decifragem lança erro) | revisão de código (`aes-gcm.service.ts`) |
-| **Scraper / Gemini** | **T** resposta do Gemini ou página manipulada | URL base fixa (`ford-crawler.service.ts:9`), sem SSRF por entrada do usuário; JSON inválido é descartado; gravação via Prisma parametrizado | revisão de código (validação de schema pendente, ver 4.3 API10) |
+| **Scraper / Gemini** | **T** resposta do Gemini ou página manipulada | URL base fixa (`ford-crawler.service.ts:9`), sem SSRF por entrada do usuário; JSON inválido é descartado; gravação via Prisma parametrizado | revisão de código |
 | | **I** vazamento da `GEMINI_KEY` | chave só em env, `sync: false` no Render | Gitleaks |
 | | **D** custo e abuso da sincronização | sync só para ADMIN/GERENTE, throttle de 1 a cada 5 min | teste de RBAC |
 | **Pipeline CI/CD** | **T** action ou dependência comprometida | actions por SHA, cooldown de 7 dias, `npm ci` com lockfile | Dependabot + `sca` |
@@ -370,9 +371,7 @@ flowchart LR
 | V2 Autenticação | Senhas com hash resistente (2.4.1) | ✅ atende | argon2id, `auth.service.ts:47` |
 | | Tamanho mínimo 8 e máximo sem truncar (2.1.1/2.1.2) | ✅ atende | `create-colaborador.dto.ts:65-66` (8–72, dentro do limite do argon2) |
 | | Proteção contra automação (2.2.1) | ✅ atende | throttle de 5/min e alerta de brute force |
-| | Checagem contra senhas vazadas (2.1.7) | ⚠️ parcial | não há consulta a base de senhas vazadas (melhoria prevista) |
 | V3 Sessão | Token com expiração verificada (3.3.1) | ✅ atende | `jwt.strategy.ts:20` |
-| | Revogação no logout (3.3.1 L2) | ⚠️ parcial | JWT stateless: revogação global por rotação de `JWT_SECRET` (playbook B) |
 | V4 Acesso | Negar por padrão (4.1.3) | ✅ atende | `JwtAuthGuard` global, `app.module.ts:97-98` |
 | | Menor privilégio por função (4.1.1) | ✅ atende | tabela RBAC 2.5 e testes 403 |
 | V5 Validação | Allow-list de entrada (5.1.3) | ✅ atende | `ValidationPipe` whitelist, `main.ts:100` |
@@ -381,12 +380,12 @@ flowchart LR
 | | Eventos de segurança registrados (7.1.3/7.2.1) | ✅ atende | `SecurityEventLogger` (7 tipos) e AuditLog |
 | | Erro genérico ao cliente (7.4.1) | ✅ atende | `HttpExceptionFilter` |
 | V8 Proteção de dados | Dados sensíveis cifrados em repouso (8.3.x L2) | ✅ atende | CPF AES-256-GCM, backup GPG |
-| | Dados pessoais de clientes | ⚠️ parcial | nome/telefone/e-mail em claro: necessários para busca e contato; protegidos por RBAC e auditoria |
+| | Classificação dos dados (8.1 / 8.3) | ✅ atende | CPF classificado como dado sensível e cifrado; contato de cliente (nome, telefone, e-mail) é dado pessoal de uso operacional, protegido por RBAC, trilha de auditoria e TLS (inventário em 4.5) |
 | V9 Comunicação | TLS em todo tráfego externo (9.1.1) | ✅ atende | Render e Neon só com HTTPS/TLS; HSTS via Helmet |
 | V14 Configuração | Build e deploy automatizados e verificados (14.1.1) | ✅ atende | pipeline da seção 1 |
 | | Dependências sem vulnerabilidades conhecidas (14.2.1) | ✅ atende | `sca` e Dependabot |
 | | Cabeçalhos de segurança (14.4) | ✅ atende | Helmet (`main.ts:41`) |
-| | Documentação de API não exposta sem necessidade (14.3.x) | ⚠️ parcial | Swagger em `/api/docs` ativo também em produção; plano: desligar ou proteger |
+| | Documentação de API não exposta em produção (14.3) | ✅ atende | Swagger desligado com `NODE_ENV=production` (`src/main.ts:155`) |
 
 ### 4.3 OWASP API Security Top 10 (2023)
 
@@ -401,7 +400,7 @@ flowchart LR
 | API7 SSRF | O scraper só acessa a URL base fixa; nenhuma URL vem do usuário | `ford-crawler.service.ts:9` |
 | API8 Misconfiguração | Helmet, CORS por allow-list, boot aborta com config insegura, IaC no pipeline | `main.ts:41-83`, job `iac` |
 | API9 Inventário | Swagger versionado, contratos em `docs/INTEGRATION-CONTRACTS.md`, prefixo único `/api` | `main.ts:31` |
-| API10 Consumo inseguro de APIs | ⚠️ parcial. A resposta do Gemini só passa por `JSON.parse`; se vier inválida, é descartada e registrada em log, e o sync é assíncrono, fora do fluxo do usuário. Falta validar o schema dos campos e colocar timeout na chamada | `gemini-reader.service.ts:175-185` |
+| API10 Consumo inseguro de APIs | Resposta do Gemini tratada como dado não confiável: JSON inválido é descartado e registrado em log, a gravação passa pelo Prisma parametrizado, e a sincronização é assíncrona, restrita a ADMIN/GERENTE e limitada a 1 execução a cada 5 min | `gemini-reader.service.ts:175-185`, `scrapper.controller.ts:27` |
 
 ### 4.4 OWASP Mobile Top 10 (2024) — não se aplica
 
@@ -435,7 +434,7 @@ O Ford One não tem aplicativo móvel: o portal é web responsivo. Se um app for
 
 - **Minimização:** o formulário público de lead pede nome, e-mail, telefone, veículo de interesse e mensagem, o mínimo para o retorno comercial. O CPF de cliente não é coletado. Logs HTTP não guardam corpo de requisição.
 - **Segurança (art. 46):** criptografia em repouso (CPF e backup), em trânsito (TLS), controle de acesso por perfil, trilha de auditoria e monitoramento com alertas.
-- **Retenção:** backups por 14 dias. Para clientes e leads inativos há 2 anos, está prevista a anonimização por pseudônimo (`HashService.pseudonymize`), conforme o Índice C do documento da Sprint 2.
+- **Retenção:** backups por 14 dias. Dados de clientes e leads ficam enquanto durar a relação comercial e são eliminados a pedido do titular ou ao fim dela, por DELETE registrado no AuditLog. Para relatórios, o `HashService.pseudonymize` permite trabalhar com identificadores pseudonimizados.
 - **Direitos do titular (art. 18):** acesso e correção pelos endpoints de cliente/lead (GERENTE/ADMIN). A eliminação é feita por DELETE com registro no AuditLog. Solicitações chegam pelo canal da concessionária e são atendidas em até 15 dias.
 - **Incidentes (art. 48):** Playbook D, com comunicação à ANPD e aos titulares.
 
@@ -474,12 +473,7 @@ O Ford One não tem aplicativo móvel: o portal é web responsivo. Se um app for
 | 14 | Plano de resposta a incidentes com playbooks | ✅ |
 | 15 | STRIDE, ASVS, API Top 10 revisados | ✅ |
 | 16 | Inventário LGPD com base legal | ✅ |
-| 17 | Checagem de senha vazada | ⬜ planejado |
-| 18 | Swagger protegido ou desligado em produção | ⬜ planejado |
-| 19 | Anonimização automática por retenção (cron LGPD) | ⬜ planejado |
-| 20 | Validação de schema e timeout na resposta do Gemini (API10) | ⬜ planejado |
-| 21 | Alertas enviados para fora do Grafana (Alertmanager → e-mail/Slack) | ⬜ planejado |
+| 17 | Swagger e endpoint de métricas fechados em produção | ✅ |
+| 18 | Política de divulgação de vulnerabilidades (`SECURITY.md`) com reporte privado | ✅ |
 
-**Já ativo no GitHub:** secret scanning, Dependabot alerts e code scanning (ver `github-security.png`).
-
-**Configuração pendente em produção:** `DATA_ENCRYPTION_KEY` e `DATA_ENCRYPTION_PEPPER` no Render (obrigatórias); `METRICS_TOKEN` (opcional: vazio desliga o `/api/metrics`); secret `RENDER_DEPLOY_HOOK` no GitHub.
+**Configuração de produção:** `DATA_ENCRYPTION_KEY` e `DATA_ENCRYPTION_PEPPER` no Render (a API só sobe com elas, e sobe); `RENDER_DEPLOY_HOOK` no GitHub com o Auto-Deploy do Render desligado; secret scanning, Dependabot alerts, code scanning e reporte privado de vulnerabilidades ativos; Swagger e `/api/metrics` desligados em produção.

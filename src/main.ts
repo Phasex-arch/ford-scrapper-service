@@ -150,15 +150,22 @@ async function bootstrap() {
     .addTag('Contato público', 'Recebimento de contatos e leads públicos')
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  // Em produção o Swagger fica desligado: o mapa completo da API não precisa
+  // estar público (ASVS 14.3). SWAGGER_ENABLED=true reabre se precisar.
+  const swaggerEnabled = !isProd || process.env.SWAGGER_ENABLED === 'true';
+  if (swaggerEnabled) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`Application running on http://localhost:${port}`);
-  logger.log(`Swagger docs available at http://localhost:${port}/api/docs`);
+  if (swaggerEnabled) {
+    logger.log(`Swagger docs available at http://localhost:${port}/api/docs`);
+  }
 }
 
 void bootstrap();
