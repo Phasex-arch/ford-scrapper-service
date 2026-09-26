@@ -44,19 +44,59 @@ real de cliente.
 Scripts em `scripts/backup-db.sh` e `scripts/restore-db.sh`. Os dumps ficam
 em `../backups/` (fora dos repositórios git, não são código).
 
-- **Backup manual**: `./scripts/backup-db.sh`
-- **Backup agendado**: instalado via `crontab` do host, todo dia às 03:00:
+**Os backups são cifrados** (`pg_dump | gzip | gpg --symmetric --cipher-algo
+AES256`, arquivo `.sql.gz.gpg`). Os dois scripts exigem `BACKUP_PASSPHRASE` e
+recusam rodar sem ela: nenhum backup é gravado em claro. Gere a passphrase
+com `openssl rand -base64 32` e guarde-a **fora desta máquina** (cofre de
+senhas do grupo). Sem ela, o backup é irrecuperável.
+
+- **Backup manual**: `BACKUP_PASSPHRASE=... ./scripts/backup-db.sh`
+- **Backup agendado**: instalado via `crontab` do host, todo dia às 03:00,
+  lendo a passphrase de um arquivo com permissão 600 (não fica no crontab):
   ```
-  0 3 * * * /mnt/Programas/Projetos/FORD/ford-scrapper-service/scripts/backup-db.sh >> /mnt/Programas/Projetos/FORD/backups/backup.log 2>&1
+  0 3 * * * BACKUP_PASSPHRASE="$(cat ~/.ford-backup-pass)" /mnt/Programas/Projetos/FORD/ford-scrapper-service/scripts/backup-db.sh >> /mnt/Programas/Projetos/FORD/backups/backup.log 2>&1
   ```
   Confirme que está ativo com `crontab -l`. Retenção padrão: 14 dias (ajustável via `RETENTION_DAYS`).
-- **Restore**: `./scripts/restore-db.sh backups/ford_AAAAMMDD_HHMMSS.sql.gz`
-  — pede confirmação explícita antes de apagar o schema atual.
+- **Restore**: `BACKUP_PASSPHRASE=... ./scripts/restore-db.sh backups/ford_AAAAMMDD_HHMMSS.sql.gz.gpg`
+  — pede confirmação explícita antes de apagar o schema atual; com
+  passphrase errada aborta sem tocar no banco.
+- **Teste de restore mensal**: restaurar o backup mais recente num Postgres
+  descartável (ex.: `observability/docker-compose.yml`, porta 5434) e
+  conferir contagem de colaboradores e clientes. Um backup nunca restaurado
+  não é backup.
 
 Recomendação adicional (fora do escopo automatizável por aqui): copiar
 periodicamente o conteúdo de `../backups/` pra fora desta máquina (outro
-disco, storage na nuvem) — um backup que mora só no mesmo disco do banco não
-protege contra falha de disco.
+disco, storage na nuvem) — como os arquivos são cifrados, podem ir para um
+storage de terceiros sem expor dado pessoal.
+
+## 2.1 Auditoria mensal de permissões
+
+Todo mês, um ADMIN roda as consultas abaixo (via `psql` no banco de
+produção) e registra o resultado na ata da revisão. Objetivo: ninguém com
+perfil acima do necessário, nenhuma conta ativa de quem saiu, nenhuma
+atividade estranha.
+
+```sql
+-- 1. Quem tem cada perfil (conferir ADMIN/GERENTE um a um)
+SELECT role, ativo, count(*) FROM "Colaborador" GROUP BY role, ativo ORDER BY role, ativo;
+SELECT nome, email, role, "updatedAt" FROM "Colaborador"
+ WHERE ativo AND role IN ('ADMIN', 'GERENTE') ORDER BY role, nome;
+
+-- 2. Atividade dos últimos 30 dias por usuário (escritas e eventos de segurança)
+SELECT "userEmail", resource, action, count(*) FROM "AuditLog"
+ WHERE "timestamp" > now() - interval '30 days'
+ GROUP BY 1, 2, 3 ORDER BY 4 DESC;
+
+-- 3. Acessos negados e logins falhos (quem está tentando o que não pode)
+SELECT "userEmail", action, ip, count(*) FROM "AuditLog"
+ WHERE action IN ('ACCESS_DENIED', 'LOGIN_FAILED') AND "timestamp" > now() - interval '30 days'
+ GROUP BY 1, 2, 3 ORDER BY 4 DESC;
+```
+
+Ações: desativar contas de desligados (`PATCH /api/colaboradores/:uuid` com
+`ativo: false`), rebaixar perfis sobrando, abrir incidente se a consulta 3
+mostrar padrão de ataque (playbooks em `docs/CYBERSECURITY-SPRINT3.md`).
 
 ## 3. TLS
 
